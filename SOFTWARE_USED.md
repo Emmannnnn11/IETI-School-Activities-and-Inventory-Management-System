@@ -1,23 +1,72 @@
 # Software Used
 
-1. **PHP**  
-   A server-side scripting language used to build the application with the Laravel framework. It handles backend processes such as authentication, event and inventory management, form processing, and database interactions.
+## Programming Language
 
-2. **JavaScript (JS)**  
-   A client-side scripting language used to create interactive elements on the web application. It enables dynamic content (e.g., the calendar), form validations, Bootstrap components, and responsive behavior in the browser.
+- **PHP 8.1**  
+  Server-side scripting language used to build the application. Handles backend logic such as authentication, event and inventory management, form processing, and database interactions.
 
-3. **PostgreSQL**  
-   SQL (Structured Query Language) is used to communicate with and manage the database. The system uses PostgreSQL (hosted on Supabase) to store users, events, inventory items, and related data through Laravel’s Eloquent ORM and migrations.
-
-4. **Laravel**  
-   A PHP framework used to develop the IETI School Activities Scheduling and Inventory Management System. It provides routing, authentication, MVC structure, and the Artisan CLI. The built-in development server (`php artisan serve`) is used for local testing and development.
-
-5. **Composer**  
-   A dependency manager for PHP. It is used to install and manage Laravel, Laravel UI, and other packages (e.g., Guzzle, Sanctum) required by the project.
-
-6. **Supabase**  
-   A hosted PostgreSQL service used as the database for the system. It provides a cloud database (with connection pooling) so the application can run without a local database server like XAMPP.
+- **JavaScript (JS)**  
+  Client-side scripting language for interactive elements on the web application. Powers the calendar, form validations, Bootstrap components, and dynamic behavior in the browser.
 
 ---
 
-*Additional frontend tools used in the project: Bootstrap 5, FullCalendar.js, Font Awesome 6, Blade (Laravel templating).*
+## Frameworks
+
+- **Laravel 10**  
+  PHP framework used to develop the IETI School Activities Scheduling and Inventory Management System. Provides routing, authentication, MVC structure, and the Artisan CLI.
+
+- **Bootstrap 5.3**  
+  CSS framework for responsive layouts, components (forms, modals, alerts, navbars), and utilities. Loaded via CDN.
+
+- **Blade**  
+  Laravel’s templating engine for server-side views.
+
+---
+
+## Database
+
+- **PostgreSQL (Supabase)**  
+  Hosted PostgreSQL used as the application database. Stores users, events, inventory items, and related data via Laravel’s Eloquent ORM and migrations. Connection pooling is handled by Supabase.
+
+---
+
+## Server Environment
+
+- **Laravel Built-in Server**  
+  Local development server (`php artisan serve`) for running the application during development.
+
+- **Apache**  
+  Web server option for production (e.g., via `.htaccess`).
+
+---
+
+## Testing Tools
+
+- **PHPUnit 10**  
+  PHP testing framework for unit and feature tests.
+
+---
+
+## Development Environment
+
+- **Composer**  
+  PHP dependency manager for Laravel, Guzzle, Sanctum, Laravel UI, and other packages.
+
+- **Laravel Sail**  
+  Docker-based local development environment (available as dev dependency).
+
+- **Laravel Pint**  
+  PHP code style fixer.
+
+- **Spatie Laravel Ignition**  
+  Error page and debugging experience for development.
+
+---
+
+## Additional Frontend Tools
+
+| Tool             | Purpose                                      |
+|------------------|----------------------------------------------|
+| FullCalendar.js 6.1.8 | Interactive calendar for event display and management |
+| Font Awesome 6   | Icons across the UI                          |
+| Figtree (Bunny Fonts)  | Typography                             |
