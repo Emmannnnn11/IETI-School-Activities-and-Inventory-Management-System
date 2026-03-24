@@ -46,6 +46,7 @@ Route::middleware(['auth'])->group(function () {
 // Event routes
 Route::middleware(['auth'])->group(function () {
     Route::get('events/history', [EventController::class, 'history'])->name('events.history');
+    Route::get('events/history/export', [EventController::class, 'exportHistory'])->name('events.history.export');
     Route::resource('events', EventController::class);
     
     // Event approval routes

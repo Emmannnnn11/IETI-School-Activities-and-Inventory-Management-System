@@ -60,10 +60,20 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-12 col-md-6 col-lg-2">
+                <div class="col-12 col-md-6 col-lg-1">
                     <button type="submit" class="btn btn-primary btn-sm w-100">
                         <i class="fas fa-search me-1"></i> Search
                     </button>
+                </div>
+                <div class="col-12 col-md-6 col-lg-2">
+                    @php $hasHistoryRecords = $history->total() > 0; @endphp
+                    <a
+                        href="{{ $hasHistoryRecords ? route('events.history.export', request()->only(['search', 'event_date', 'status', 'department'])) : '#' }}"
+                        class="btn btn-success btn-sm w-100 {{ $hasHistoryRecords ? '' : 'disabled' }}"
+                        @if(!$hasHistoryRecords) aria-disabled="true" tabindex="-1" title="No records to export" @endif
+                    >
+                        <i class="fas fa-file-export me-1"></i> Export
+                    </a>
                 </div>
                 @if(($filters['search'] ?? '') !== '' || ($filters['event_date'] ?? '') !== '' || ($filters['status'] ?? '') !== '' || ($filters['department'] ?? '') !== '')
                 <div class="col-12 col-lg-1">
@@ -71,6 +81,11 @@
                 </div>
                 @endif
             </form>
+            @if(!$hasHistoryRecords)
+                <small class="text-muted d-block mt-2">
+                    No filtered records available to export.
+                </small>
+            @endif
         </div>
     </div>
 

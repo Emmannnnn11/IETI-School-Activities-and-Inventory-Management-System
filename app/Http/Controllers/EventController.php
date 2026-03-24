@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EventController extends Controller
 {
@@ -53,106 +54,9 @@ class EventController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
-        // Get all finished events (past event_date) that are approved or rejected
-        $finishedEvents = Event::with(['creator', 'approver'])
-            ->where('event_date', '<', now()->toDateString())
-            ->whereIn('status', ['approved', 'rejected'])
-            ->orderByDesc('event_date')
-            ->orderByDesc('created_at')
-            ->get();
-
-        // Get existing history records
-        $historyRecords = EventHistory::with('performedBy')
-            ->orderByDesc('performed_at')
-            ->orderByDesc('created_at')
-            ->get();
-
-        // Load creator and approver information for history records
-        $creatorIds = $historyRecords->pluck('event_data')->filter()->map(function ($data) {
-            return is_array($data) && isset($data['created_by']) ? $data['created_by'] : null;
-        })->filter()->unique();
-        
-        $approverIds = $historyRecords->pluck('event_data')->filter()->map(function ($data) {
-            return is_array($data) && isset($data['approved_by']) ? $data['approved_by'] : null;
-        })->filter()->unique();
-        
-        $allUserIds = $creatorIds->merge($approverIds)->unique();
-        $users = \App\Models\User::whereIn('id', $allUserIds)->get()->keyBy('id');
-
-        // Add creator and approver to history records
-        $historyRecords = $historyRecords->map(function ($record) use ($users) {
-            $eventData = $record->event_data;
-            if (is_array($eventData)) {
-                if (isset($eventData['created_by']) && $users->has($eventData['created_by'])) {
-                    $record->creator = $users->get($eventData['created_by']);
-                }
-                if (isset($eventData['approved_by']) && $users->has($eventData['approved_by'])) {
-                    $record->approver = $users->get($eventData['approved_by']);
-                }
-            }
-            return $record;
-        });
-
-        // Convert finished events to history-like format
-        $finishedEventsHistory = $finishedEvents->map(function ($event) {
-            return (object) [
-                'id' => 'event_' . $event->id,
-                'event_id' => $event->id,
-                'action' => $event->status === 'approved' ? 'approved' : 'rejected',
-                'title' => $event->title,
-                'status' => $event->status,
-                'event_date' => $event->event_date,
-                'performed_at' => $event->approved_at ?? $event->updated_at,
-                'performed_by' => $event->approved_by,
-                'created_by' => $event->created_by,
-                'performedBy' => $event->approver,
-                'creator' => $event->creator,
-                'is_finished_event' => true,
-                'event_data' => $event->toArray(),
-            ];
-        });
-
-        // Combine and sort by performed_at/event_date
-        $allHistory = $historyRecords->concat($finishedEventsHistory)
-            ->sortByDesc(function ($item) {
-                return $item->performed_at ?? $item->event_date;
-            })
-            ->values();
-
-        // Apply filters from request
-        $search = request()->input('search');
-        $eventDate = request()->input('event_date');
-        $statusFilter = request()->input('status');
-        $departmentFilter = request()->input('department');
-
-        $filtered = $allHistory->filter(function ($item) use ($search, $eventDate, $statusFilter, $departmentFilter) {
-            if ($search !== null && $search !== '') {
-                if (stripos($item->title ?? '', $search) === false) {
-                    return false;
-                }
-            }
-            if ($eventDate !== null && $eventDate !== '') {
-                $itemDate = $item->event_date instanceof \DateTimeInterface
-                    ? $item->event_date->format('Y-m-d')
-                    : (\Illuminate\Support\Carbon::parse($item->event_date)->format('Y-m-d') ?? null);
-                if ($itemDate !== $eventDate) {
-                    return false;
-                }
-            }
-            if ($statusFilter !== null && $statusFilter !== '') {
-                if (($item->status ?? '') !== $statusFilter) {
-                    return false;
-                }
-            }
-            if ($departmentFilter !== null && $departmentFilter !== '') {
-                $creator = $item->creator ?? null;
-                $creatorDepartment = $creator && is_object($creator) ? ($creator->department ?? null) : null;
-                if ($creatorDepartment !== $departmentFilter) {
-                    return false;
-                }
-            }
-            return true;
-        })->values();
+        $filters = $this->extractHistoryFilters(request());
+        $allHistory = $this->buildAllHistoryCollection();
+        $filtered = $this->applyHistoryFilters($allHistory, $filters);
 
         // Manual pagination on filtered results
         $page = request()->get('page', 1);
@@ -177,14 +81,239 @@ class EventController extends Controller
             ->unique()
             ->values();
 
-        $filters = [
-            'search' => $search,
-            'event_date' => $eventDate,
-            'status' => $statusFilter,
-            'department' => $departmentFilter,
-        ];
-
         return view('events.history', compact('history', 'departments', 'filters'));
+    }
+
+    /**
+     * Export archived event history based on active filters.
+     */
+    public function exportHistory(Request $request): StreamedResponse
+    {
+        $user = Auth::user();
+
+        if (!$user->isAdmin()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $filters = $this->extractHistoryFilters($request);
+        $allHistory = $this->buildAllHistoryCollection();
+        $filtered = $this->applyHistoryFilters($allHistory, $filters);
+
+        if ($filtered->isEmpty()) {
+            return redirect()
+                ->route('events.history', $filters)
+                ->with('error', 'No history records found for the selected filters.');
+        }
+
+        $filename = 'event-history-' . now()->format('Ymd_His') . '.xls';
+
+        return response()->streamDownload(function () use ($filtered) {
+            $output = fopen('php://output', 'w');
+            $escape = static function ($value): string {
+                return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+            };
+
+            fwrite($output, "<?xml version=\"1.0\"?>\n");
+            fwrite($output, "<?mso-application progid=\"Excel.Sheet\"?>\n");
+            fwrite($output, "<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:x=\"urn:schemas-microsoft-com:office:excel\" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:html=\"http://www.w3.org/TR/REC-html40\">\n");
+            fwrite($output, "<Worksheet ss:Name=\"Event History\">\n<Table>\n");
+
+            $headers = [
+                'Reference #',
+                'Event Name',
+                'Date',
+                'Status',
+                'Department',
+                'Created By',
+                'Performed By',
+                'Action',
+                'Performed At',
+                'Location',
+                'Start Time',
+                'End Time',
+            ];
+            fwrite($output, "<Row>");
+            foreach ($headers as $header) {
+                fwrite($output, "<Cell><Data ss:Type=\"String\">" . $escape($header) . "</Data></Cell>");
+            }
+            fwrite($output, "</Row>\n");
+
+            foreach ($filtered as $entry) {
+                $eventData = is_array($entry->event_data ?? null) ? $entry->event_data : [];
+                $creatorName = $entry->creator->name ?? (isset($eventData['created_by']) ? 'User #' . $eventData['created_by'] : '');
+                $department = $entry->creator->department ?? '';
+                $performedBy = $entry->approver->name
+                    ?? $entry->performedBy->name
+                    ?? (isset($eventData['approved_by']) ? 'User #' . $eventData['approved_by'] : 'System');
+                $row = [
+                    $entry->event_id ?? '',
+                    $entry->title ?? '',
+                    $this->safeDate($entry->event_date),
+                    ucfirst((string) ($entry->status ?? '')),
+                    $department,
+                    $creatorName,
+                    $performedBy,
+                    str_replace('_', ' ', (string) ($entry->action ?? '')),
+                    $this->safeDateTime($entry->performed_at),
+                    $eventData['location'] ?? '',
+                    $this->safeTime($eventData['start_time'] ?? null),
+                    $this->safeTime($eventData['end_time'] ?? null),
+                ];
+
+                fwrite($output, "<Row>");
+                foreach ($row as $value) {
+                    fwrite($output, "<Cell><Data ss:Type=\"String\">" . $escape($value) . "</Data></Cell>");
+                }
+                fwrite($output, "</Row>\n");
+            }
+
+            fwrite($output, "</Table>\n</Worksheet>\n</Workbook>");
+            fclose($output);
+        }, $filename, ['Content-Type' => 'application/vnd.ms-excel']);
+    }
+
+    private function extractHistoryFilters(Request $request): array
+    {
+        return [
+            'search' => (string) $request->input('search', ''),
+            'event_date' => (string) $request->input('event_date', ''),
+            'status' => (string) $request->input('status', ''),
+            'department' => (string) $request->input('department', ''),
+        ];
+    }
+
+    private function buildAllHistoryCollection()
+    {
+        $finishedEvents = Event::with(['creator', 'approver'])
+            ->where('event_date', '<', now()->toDateString())
+            ->whereIn('status', ['approved', 'rejected'])
+            ->orderByDesc('event_date')
+            ->orderByDesc('created_at')
+            ->get();
+
+        $historyRecords = EventHistory::with('performedBy')
+            ->orderByDesc('performed_at')
+            ->orderByDesc('created_at')
+            ->get();
+
+        $creatorIds = $historyRecords->pluck('event_data')->filter()->map(function ($data) {
+            return is_array($data) && isset($data['created_by']) ? $data['created_by'] : null;
+        })->filter()->unique();
+
+        $approverIds = $historyRecords->pluck('event_data')->filter()->map(function ($data) {
+            return is_array($data) && isset($data['approved_by']) ? $data['approved_by'] : null;
+        })->filter()->unique();
+
+        $allUserIds = $creatorIds->merge($approverIds)->unique();
+        $users = \App\Models\User::whereIn('id', $allUserIds)->get()->keyBy('id');
+
+        $historyRecords = $historyRecords->map(function ($record) use ($users) {
+            $eventData = $record->event_data;
+            if (is_array($eventData)) {
+                if (isset($eventData['created_by']) && $users->has($eventData['created_by'])) {
+                    $record->creator = $users->get($eventData['created_by']);
+                }
+                if (isset($eventData['approved_by']) && $users->has($eventData['approved_by'])) {
+                    $record->approver = $users->get($eventData['approved_by']);
+                }
+            }
+            return $record;
+        });
+
+        $finishedEventsHistory = $finishedEvents->map(function ($event) {
+            return (object) [
+                'id' => 'event_' . $event->id,
+                'event_id' => $event->id,
+                'action' => $event->status === 'approved' ? 'approved' : 'rejected',
+                'title' => $event->title,
+                'status' => $event->status,
+                'event_date' => $event->event_date,
+                'performed_at' => $event->approved_at ?? $event->updated_at,
+                'performed_by' => $event->approved_by,
+                'created_by' => $event->created_by,
+                'performedBy' => $event->approver,
+                'creator' => $event->creator,
+                'is_finished_event' => true,
+                'event_data' => $event->toArray(),
+            ];
+        });
+
+        return $historyRecords->concat($finishedEventsHistory)
+            ->sortByDesc(function ($item) {
+                return $item->performed_at ?? $item->event_date;
+            })
+            ->values();
+    }
+
+    private function applyHistoryFilters($allHistory, array $filters)
+    {
+        return $allHistory->filter(function ($item) use ($filters) {
+            if ($filters['search'] !== '' && stripos($item->title ?? '', $filters['search']) === false) {
+                return false;
+            }
+
+            if ($filters['event_date'] !== '') {
+                $itemDate = $item->event_date instanceof \DateTimeInterface
+                    ? $item->event_date->format('Y-m-d')
+                    : (\Illuminate\Support\Carbon::parse($item->event_date)->format('Y-m-d') ?? null);
+                if ($itemDate !== $filters['event_date']) {
+                    return false;
+                }
+            }
+
+            if ($filters['status'] !== '' && ($item->status ?? '') !== $filters['status']) {
+                return false;
+            }
+
+            if ($filters['department'] !== '') {
+                $creator = $item->creator ?? null;
+                $creatorDepartment = $creator && is_object($creator) ? ($creator->department ?? null) : null;
+                if ($creatorDepartment !== $filters['department']) {
+                    return false;
+                }
+            }
+
+            return true;
+        })->values();
+    }
+
+    private function safeDate($value): string
+    {
+        if (!$value) {
+            return '';
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse($value)->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return '';
+        }
+    }
+
+    private function safeDateTime($value): string
+    {
+        if (!$value) {
+            return '';
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse($value)->format('Y-m-d H:i:s');
+        } catch (\Throwable $e) {
+            return '';
+        }
+    }
+
+    private function safeTime($value): string
+    {
+        if (!$value) {
+            return '';
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse($value)->format('H:i');
+        } catch (\Throwable $e) {
+            return '';
+        }
     }
 
     /**
