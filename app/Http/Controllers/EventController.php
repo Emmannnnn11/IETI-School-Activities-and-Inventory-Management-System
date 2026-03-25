@@ -127,6 +127,7 @@ class EventController extends Controller
                 'Created By',
                 'Performed By',
                 'Action',
+                'Reason',
                 'Performed At',
                 'Location',
                 'Start Time',
@@ -154,6 +155,10 @@ class EventController extends Controller
                     $creatorName,
                     $performedBy,
                     str_replace('_', ' ', (string) ($entry->action ?? '')),
+                    // Prefer the normalized history column; fall back for older records.
+                    $entry->reason
+                        ?? ($eventData['rejection_reason'] ?? null)
+                        ?? ($eventData['reason'] ?? null),
                     $this->safeDateTime($entry->performed_at),
                     $eventData['location'] ?? '',
                     $this->safeTime($eventData['start_time'] ?? null),
@@ -196,6 +201,13 @@ class EventController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
+        // Avoid duplicate “rejected” history cards if we already archived the rejection action.
+        $loggedRejectedEventIds = $historyRecords
+            ->where('action', 'rejected')
+            ->pluck('event_id')
+            ->filter()
+            ->unique();
+
         $creatorIds = $historyRecords->pluck('event_data')->filter()->map(function ($data) {
             return is_array($data) && isset($data['created_by']) ? $data['created_by'] : null;
         })->filter()->unique();
@@ -220,7 +232,11 @@ class EventController extends Controller
             return $record;
         });
 
-        $finishedEventsHistory = $finishedEvents->map(function ($event) {
+        $finishedEventsHistory = $finishedEvents
+            ->reject(function ($event) use ($loggedRejectedEventIds) {
+                return $event->status === 'rejected' && $loggedRejectedEventIds->contains($event->id);
+            })
+            ->map(function ($event) {
             return (object) [
                 'id' => 'event_' . $event->id,
                 'event_id' => $event->id,
@@ -233,6 +249,7 @@ class EventController extends Controller
                 'created_by' => $event->created_by,
                 'performedBy' => $event->approver,
                 'creator' => $event->creator,
+                'reason' => $event->status === 'rejected' ? ($event->rejection_reason ?: null) : null,
                 'is_finished_event' => true,
                 'event_data' => $event->toArray(),
             ];
@@ -952,31 +969,57 @@ class EventController extends Controller
                 ->with('error', 'Only pending events can be rejected.');
         }
 
-        $request->validate([
-            'rejection_reason' => 'required|string|max:500',
-        ]);
+        DB::beginTransaction();
 
-        $event->update([
-            'status' => 'rejected',
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-            'rejection_reason' => $request->rejection_reason,
-        ]);
-
-        // Log rejection
         try {
+            $request->validate([
+                // Require a meaningful reason (min 10 chars) so users can see why.
+                'rejection_reason' => 'required|string|min:10|max:500',
+            ]);
+
+            $event->update([
+                'status' => 'rejected',
+                'approved_by' => $user->id,
+                'approved_at' => now(),
+                'rejection_reason' => $request->rejection_reason,
+            ]);
+
+            EventHistory::create([
+                'event_id' => $event->id,
+                'action' => 'rejected',
+                'title' => $event->title,
+                'status' => 'rejected',
+                'event_date' => $event->event_date,
+                'event_data' => $event->toArray(),
+                'reason' => $request->rejection_reason,
+                'performed_by' => $user->id,
+                'performed_at' => $event->approved_at ?? now(),
+            ]);
+
+            // Log rejection
             Log::info('Event rejected', [
                 'event_id' => $event->id,
                 'rejected_by' => $user->id,
                 'rejected_by_role' => $user->role,
                 'reason' => $request->rejection_reason,
             ]);
-        } catch (\Exception $logEx) {
-            Log::error('Failed to write event rejection log', ['error' => $logEx->getMessage()]);
-        }
 
-        return redirect()->back()
-            ->with('success', 'Event rejected successfully.');
+            DB::commit();
+
+            return redirect()->back()
+                ->with('success', 'Event rejected successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            Log::error('Failed to reject event', [
+                'error' => $e->getMessage(),
+                'event_id' => $event->id,
+                'user_id' => $user->id ?? null,
+            ]);
+
+            return redirect()->back()
+                ->with('error', 'Failed to reject event. Please try again.');
+        }
     }
 
     /**

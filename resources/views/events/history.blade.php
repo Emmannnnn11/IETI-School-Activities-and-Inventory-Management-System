@@ -126,6 +126,7 @@
                 if (!$performerName) {
                     $performerName = 'System';
                 }
+                $reason = $entry->reason ?? ($data['rejection_reason'] ?? null);
                 $entryId = $entry->id ?? ('entry_' . $entry->event_id . '_' . ($entry->performed_at ? $entry->performed_at->timestamp : 0));
             @endphp
             <div class="col-12 col-md-6 col-lg-4">
@@ -193,6 +194,11 @@
                                         <span class="text-muted">by {{ $performerName }}</span>
                                         <span class="text-muted">on {{ optional($entry->performed_at)->format('M d, Y \a\t g:i A') ?? '—' }}</span>
                                     </div>
+                                    @if($entry->action === 'rejected' && !empty($reason))
+                                        <div class="mt-2 text-danger small">
+                                            – Reason: {{ $reason }}
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                         </div>

@@ -16,6 +16,7 @@ class EventHistory extends Model
         'status',
         'event_date',
         'event_data',
+        'reason',
         'performed_by',
         'performed_at',
     ];

@@ -106,7 +106,7 @@
                                                         <div class="mb-3">
                                                             <label for="rejection_reason" class="form-label">Reason for Rejection</label>
                                                             <textarea class="form-control" id="rejection_reason" name="rejection_reason" 
-                                                                      rows="3" required placeholder="Please provide a reason for rejecting this event..."></textarea>
+                                                                      rows="3" required minlength="10" maxlength="500" placeholder="Please provide a reason for rejecting this event..."></textarea>
                                                         </div>
                                                     </div>
                                                     <div class="modal-footer">
@@ -230,7 +230,7 @@
                                                     <div class="mb-3">
                                                         <label for="rejection_reason" class="form-label">Reason for Rejection</label>
                                                         <textarea class="form-control" id="rejection_reason" name="rejection_reason" 
-                                                                  rows="3" required placeholder="Please provide a reason for rejecting this event..."></textarea>
+                                                                  rows="3" required minlength="10" maxlength="500" placeholder="Please provide a reason for rejecting this event..."></textarea>
                                                     </div>
                                                 </div>
                                                 <div class="modal-footer">
