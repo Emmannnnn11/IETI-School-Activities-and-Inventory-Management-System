@@ -124,17 +124,21 @@ class User extends Authenticatable
      */
     public function canAccessInventoryCategory(?string $category): bool
     {
-        // If user has allowed categories defined, they are restricted - check those first
-        if (!empty($this->allowed_inventory_categories)) {
-            return in_array($category, $this->allowed_inventory_categories);
+        $allowedCategories = $this->getAllowedInventoryCategories();
+
+        // Empty means unrestricted access (admin / Head Maintenance / unrestricted staff).
+        if (empty($allowedCategories)) {
+            return in_array($this->role, ['admin', 'staff', 'Head Maintenance']);
         }
 
-        // Admins, staff, and Head Maintenance without restrictions can access all categories
-        if (in_array($this->role, ['admin', 'staff', 'Head Maintenance'])) {
-            return true;
+        if ($category === null || trim($category) === '') {
+            return false;
         }
 
-        return false;
+        $normalizedCategory = $this->normalizeInventoryCategory($category);
+        $normalizedAllowed = array_map([$this, 'normalizeInventoryCategory'], $allowedCategories);
+
+        return in_array($normalizedCategory, $normalizedAllowed, true);
     }
 
     /**
@@ -142,18 +146,31 @@ class User extends Authenticatable
      */
     public function getAllowedInventoryCategories(): array
     {
-        // If user has allowed categories defined, return those (restricted access)
-        if (!empty($this->allowed_inventory_categories)) {
-            return $this->allowed_inventory_categories;
+        // Head Maintenance and admins are always unrestricted.
+        if (in_array($this->role, ['admin', 'Head Maintenance'])) {
+            return [];
         }
 
-        // Admins, staff, and Head Maintenance without restrictions can access all categories
-        // Return empty array to indicate all categories are accessible
-        if (in_array($this->role, ['admin', 'staff', 'Head Maintenance'])) {
-            return []; // Empty array means all categories
+        // Explicit user category assignments take precedence.
+        if (!empty($this->allowed_inventory_categories)) {
+            return array_values(array_filter(
+                array_unique(array_map('trim', $this->allowed_inventory_categories)),
+                static fn ($category) => $category !== ''
+            ));
+        }
+
+        // Fallback: restrict by assigned department/category when no explicit list exists.
+        $department = trim((string) $this->department);
+        if ($department !== '') {
+            return [$department];
         }
 
         return [];
+    }
+
+    private function normalizeInventoryCategory(string $category): string
+    {
+        return mb_strtolower(trim($category));
     }
 
     /**
