@@ -28,6 +28,15 @@
                         Add New Item
                     </a>
                     @endif
+
+                    <a
+                        href="{{ $hasBorrowingRecords ? route('inventory.export') : '#' }}"
+                        class="btn btn-success {{ $hasBorrowingRecords ? '' : 'disabled' }}"
+                        @if(!$hasBorrowingRecords) aria-disabled="true" tabindex="-1" title="No records to export" @endif
+                    >
+                        <i class="fas fa-file-export me-2"></i>
+                        Export
+                    </a>
                 </div>
             </div>
         </div>
@@ -64,7 +73,7 @@
                         @endphp
                         @if($canEditCategory)
                         <a href="{{ route('inventory.category.edit', ['category' => urlencode($category)]) }}" 
-                           class="btn btn-sm btn-outline-warning">
+                           class="btn btn-sm btn-edit-category">
                             <i class="fas fa-edit me-1"></i> Edit Category
                         </a>
                         @endif

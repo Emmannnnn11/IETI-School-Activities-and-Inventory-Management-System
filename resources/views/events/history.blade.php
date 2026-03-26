@@ -14,10 +14,10 @@
     </div>
 
     <div class="mb-3">
-        <h5 class="text-muted mb-0">
-            <i class="fas fa-archive me-2"></i>
-            Archived Actions
-        </h5>
+    <h5 class="text-dark fw-bold fs-5 mb-0">
+    <i class="fas fa-archive me-2"></i>
+    Archived Actions
+    </h5>
     </div>
 
     <div class="card shadow-sm border mb-4">
@@ -44,8 +44,7 @@
                     </label>
                     <select name="status" id="status" class="form-select form-select-sm">
                         <option value="">All statuses</option>
-                        <option value="approved" {{ ($filters['status'] ?? '') === 'approved' ? 'selected' : '' }}>Approved</option>
-                        <option value="pending" {{ ($filters['status'] ?? '') === 'pending' ? 'selected' : '' }}>Pending</option>
+                        <option value="completed" {{ ($filters['status'] ?? '') === 'completed' ? 'selected' : '' }}>Completed</option>
                         <option value="rejected" {{ ($filters['status'] ?? '') === 'rejected' ? 'selected' : '' }}>Rejected</option>
                     </select>
                 </div>
@@ -138,9 +137,9 @@
                                 {{ $entry->title }}
                             </h6>
                             <span class="badge
-                                @if($entry->status === 'approved') bg-success
-                                @elseif($entry->status === 'pending') bg-warning text-dark
-                                @else bg-danger
+                                @if($entry->status === 'completed') bg-success
+                                @elseif($entry->status === 'rejected') bg-danger
+                                @else bg-secondary
                                 @endif">
                                 {{ ucfirst($entry->status) }}
                             </span>
@@ -179,7 +178,9 @@
                             <div class="collapse mt-2" id="historyLog{{ $entryId }}">
                                 <div class="small bg-light rounded p-2">
                                     <div class="d-flex flex-wrap align-items-center gap-1">
-                                        @if($entry->action === 'approved')
+                                        @if($entry->action === 'completed')
+                                            <i class="fas fa-check-circle text-success me-2"></i>
+                                        @elseif($entry->action === 'approved')
                                             <i class="fas fa-check-circle text-success me-2"></i>
                                         @elseif($entry->action === 'rejected')
                                             <i class="fas fa-times-circle text-danger me-2"></i>
@@ -202,21 +203,32 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        @if(Auth::user() && Auth::user()->isAdmin() && ($entry->status ?? '') === 'rejected' && !empty($entry->event_id))
+                            <form action="{{ route('events.destroy', $entry->event_id) }}" method="POST" class="mt-3"
+                                  onsubmit="return confirm('Delete this rejected event? This action cannot be undone, but a history entry will be created.');">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-outline-danger w-100">
+                                    <i class="fas fa-trash me-1"></i> Delete Rejected Event
+                                </button>
+                            </form>
+                        @endif
                     </div>
                 </div>
             </div>
             @endforeach
         </div>
 
-        <div class="mt-4 d-flex justify-content-center">
-            {{ $history->links() }}
+        <div class="mt-4 d-flex justify-content-center align-items-center ietip-history-pagination">
+            {{ $history->links('pagination::compact-bootstrap-5') }}
         </div>
     @else
         <div class="card border-0 shadow-sm">
             <div class="card-body text-center py-5">
                 <i class="fas fa-folder-open fa-4x text-muted mb-3"></i>
                 <h5 class="text-muted">No history records yet</h5>
-                <p class="text-muted mb-0">Finished events (approved or rejected) will appear here once available.</p>
+                    <p class="text-muted mb-0">Completed or rejected events will appear here once available.</p>
             </div>
         </div>
     @endif

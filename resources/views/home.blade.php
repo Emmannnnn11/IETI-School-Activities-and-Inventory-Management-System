@@ -9,9 +9,9 @@
                     <i class="fas fa-tachometer-alt me-2"></i>
                     Dashboard
                 </h2>
-                <div class="text-muted">
-                    Welcome back, {{ Auth::user()->name }}!
-                </div>
+                <div class="text-dark fw-bold fs-4">
+    Welcome back, {{ Auth::user()->name }}!
+</div>
             </div>
         </div>
     </div>
@@ -39,9 +39,9 @@
         <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
-                    <i class="fas fa-times-circle fa-3x text-danger mb-3"></i>
-                    <h4 class="text-danger">{{ $events->where('status', 'rejected')->count() }}</h4>
-                    <p class="text-muted mb-0">Rejected Events</p>
+                    <i class="fas fa-archive fa-3x text-secondary mb-3"></i>
+                    <h4 class="text-secondary">{{ $archivedEventsCount }}</h4>
+                    <p class="text-muted mb-0">Archived (Completed/Rejected)</p>
                 </div>
             </div>
         </div>

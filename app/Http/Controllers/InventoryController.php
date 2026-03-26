@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InventoryController extends Controller
 {
@@ -98,7 +99,22 @@ class InventoryController extends Controller
                 return [$displayCategory => $items->values()];
             });
 
-        return view('inventory.index', compact('inventoryItems'));
+        $borrowingQuery = EventItem::query()
+            ->where('status', 'approved')
+            ->where(function ($q) {
+                $q->where('quantity_requested', '>', 0);
+            });
+
+        // Keep export consistent with the inventory categories user can access
+        if (!empty($allowedCategories)) {
+            $borrowingQuery->whereHas('inventoryItem', function ($q) use ($allowedCategories) {
+                $q->whereIn('category', $allowedCategories);
+            });
+        }
+
+        $hasBorrowingRecords = $borrowingQuery->exists();
+
+        return view('inventory.index', compact('inventoryItems', 'hasBorrowingRecords'));
     }
 
     /**
@@ -412,5 +428,119 @@ class InventoryController extends Controller
         
         return redirect()->route('inventory.index')
             ->with('success', 'Inventory item deleted successfully.');
+    }
+
+    /**
+     * Export approved inventory borrowing records to an Excel-compatible file.
+     */
+    public function exportBorrowingRecords(Request $request): StreamedResponse
+    {
+        $user = Auth::user();
+
+        if (!$user->canManageInventory()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $allowedCategories = $user->getAllowedInventoryCategories();
+
+        $eventItems = EventItem::query()
+            ->where('status', 'approved')
+            ->where(function ($q) {
+                $q->where('quantity_requested', '>', 0);
+            })
+            ->with([
+                'inventoryItem',
+                'event.creator',
+            ])
+            ->when(!empty($allowedCategories), function ($q) use ($allowedCategories) {
+                $q->whereHas('inventoryItem', function ($subQuery) use ($allowedCategories) {
+                    $subQuery->whereIn('category', $allowedCategories);
+                });
+            })
+            ->orderByDesc('created_at')
+            ->get();
+
+        if ($eventItems->isEmpty()) {
+            return redirect()
+                ->route('inventory.index')
+                ->with('error', 'No borrowing records found to export.');
+        }
+
+        $filename = 'inventory-borrowing-records-' . now()->format('Ymd_His') . '.xls';
+
+        return response()->streamDownload(function () use ($eventItems) {
+            $output = fopen('php://output', 'w');
+            $escape = static function ($value): string {
+                return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+            };
+
+            fwrite($output, "<?xml version=\"1.0\"?>\n");
+            fwrite($output, "<?mso-application progid=\"Excel.Sheet\"?>\n");
+            fwrite($output, "<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:x=\"urn:schemas-microsoft-com:office:excel\" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:html=\"http://www.w3.org/TR/REC-html40\">\n");
+            fwrite($output, "<Worksheet ss:Name=\"Inventory Borrowing Records\">\n<Table>\n");
+
+            $headers = [
+                'Inventory Item Name',
+                'Users Department',
+                'Quantity Requested',
+                'Event Title',
+                'Created At',
+                'Returned At',
+            ];
+
+            fwrite($output, "<Row>");
+            foreach ($headers as $header) {
+                fwrite($output, "<Cell><Data ss:Type=\"String\">" . $escape($header) . "</Data></Cell>");
+            }
+            fwrite($output, "</Row>\n");
+
+            foreach ($eventItems as $eventItem) {
+                $itemName = $eventItem->inventoryItem->name ?? '';
+                $department = $eventItem->event->creator->department ?? '';
+                $quantityRequested = (int) ($eventItem->quantity_requested ?? 0);
+                $quantity = $quantityRequested;
+                $eventTitle = $eventItem->event->title ?? '';
+
+                $createdAt = $this->safeDateTime($eventItem->created_at);
+                $returnedAt = $eventItem->returned_at
+                    ? $this->safeDateTime($eventItem->returned_at)
+                    : 'Not yet returned';
+
+                $row = [
+                    $itemName,
+                    $department,
+                    (string) $quantity,
+                    $eventTitle,
+                    $createdAt,
+                    $returnedAt,
+                ];
+
+                fwrite($output, "<Row>");
+                foreach ($row as $value) {
+                    fwrite($output, "<Cell><Data ss:Type=\"String\">" . $escape($value) . "</Data></Cell>");
+                }
+                fwrite($output, "</Row>\n");
+            }
+
+            fwrite($output, "</Table>\n</Worksheet>\n</Workbook>");
+            fclose($output);
+        }, $filename, ['Content-Type' => 'application/vnd.ms-excel']);
+    }
+
+    private function safeDateTime($value): string
+    {
+        if (!$value) {
+            return '';
+        }
+
+        try {
+            if ($value instanceof \DateTimeInterface) {
+                return $value->format('Y-m-d H:i:s');
+            }
+
+            return \Illuminate\Support\Carbon::parse($value)->format('Y-m-d H:i:s');
+        } catch (\Throwable $e) {
+            return '';
+        }
     }
 }

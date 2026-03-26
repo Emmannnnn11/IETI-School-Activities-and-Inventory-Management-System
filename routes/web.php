@@ -66,6 +66,10 @@ Route::middleware(['auth'])->group(function () {
 
 // ✅ Inventory routes (fixed parameter binding)
 Route::middleware(['auth', 'can:manage-inventory'])->group(function () {
+    // Export inventory borrowing records (must be defined before the resource route)
+    Route::get('inventory/export', [InventoryController::class, 'exportBorrowingRecords'])
+        ->name('inventory.export');
+
     Route::resource('inventory', InventoryController::class)->parameters([
         'inventory' => 'inventoryItem'
     ]);
@@ -85,9 +89,11 @@ Route::middleware(['auth'])->group(function () {
 // API routes for calendar
 Route::middleware(['auth'])->group(function () {
     Route::get('/api/events', function () {
-        // Get all future events (past events are automatically removed)
-        // Include all statuses so admin-created approved events show up immediately
+        // Active/upcoming events only:
+        // - end_datetime (event_date + end_time) must be strictly greater than now
+        // - rejected events belong in history, not in the active calendar
         $events = \App\Models\Event::with(['creator', 'approver', 'eventItems.inventoryItem'])
+            ->where('status', '!=', 'rejected')
             ->future()
             ->orderBy('event_date', 'asc')
             ->get();

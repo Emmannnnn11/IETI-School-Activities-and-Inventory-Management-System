@@ -121,7 +121,18 @@ class Event extends Model
      */
     public function scopeFuture($query)
     {
-        return $query->where('event_date', '>=', now()->toDateString());
+        $today = now()->toDateString();
+        $nowTime = now()->format('H:i:s');
+
+        // "Future" means the event is still active/upcoming:
+        // end_datetime (event_date + end_time) must be strictly greater than now.
+        return $query->where(function ($q) use ($today, $nowTime) {
+            $q->where('event_date', '>', $today)
+              ->orWhere(function ($q2) use ($today, $nowTime) {
+                  $q2->where('event_date', $today)
+                     ->where('end_time', '>', $nowTime);
+              });
+        });
     }
 
     /**

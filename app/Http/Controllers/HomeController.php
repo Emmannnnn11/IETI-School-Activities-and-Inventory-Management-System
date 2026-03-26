@@ -29,11 +29,29 @@ class HomeController extends Controller
     {
         $user = Auth::user();
         
-        // All users can see all future events (past events are automatically removed)
+        // Active/upcoming events only (end_datetime > now). Rejected events belong in history.
         $events = Event::with(['creator', 'approver', 'eventItems.inventoryItem'])
+            ->where('status', '!=', 'rejected')
             ->future()
             ->orderBy('event_date', 'asc')
             ->get();
+
+        $now = now();
+        $today = $now->toDateString();
+        $nowTime = $now->format('H:i:s');
+
+        $rejectedEventsCount = Event::where('status', 'rejected')->count();
+        $completedEventsCount = Event::where('status', '!=', 'rejected')
+            ->where(function ($q) use ($today, $nowTime) {
+                $q->where('event_date', '<', $today)
+                    ->orWhere(function ($q2) use ($today, $nowTime) {
+                        $q2->where('event_date', $today)
+                           ->where('end_time', '<=', $nowTime);
+                    });
+            })
+            ->count();
+
+        $archivedEventsCount = $rejectedEventsCount + $completedEventsCount;
 
         // Get inventory items for staff and admin
         $inventoryItems = collect();
@@ -70,6 +88,6 @@ class HomeController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        return view('home', compact('events', 'inventoryItems', 'user', 'pendingBorrowedItems'));
+        return view('home', compact('events', 'inventoryItems', 'user', 'pendingBorrowedItems', 'archivedEventsCount'));
     }
 }

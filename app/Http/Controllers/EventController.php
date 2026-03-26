@@ -31,11 +31,12 @@ class EventController extends Controller
     {
         $user = Auth::user();
         
-        // Get all future events (approved, pending, and rejected) so they all show up
-        // Admin-created approved events should appear immediately
-        // Head-created pending events should appear for admin approval
+        // Active/upcoming events only:
+        // - exclude rejected events (they belong in history)
+        // - use end_date + end_time vs now() to exclude completed/ended events
         $events = Event::with(['creator', 'approver', 'eventItems.inventoryItem'])
-            ->where('event_date', '>=', now()->toDateString()) // Future events only
+            ->where('status', '!=', 'rejected')
+            ->future()
             ->orderBy('event_date', 'asc')
             ->orderBy('created_at', 'desc') // Show newest events first for same date
             ->get();
@@ -113,6 +114,26 @@ class EventController extends Controller
                 return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
             };
 
+            $userCache = [];
+            $resolveUserName = function ($userId) use (&$userCache): string {
+                if ($userId === null || $userId === '') {
+                    return 'System';
+                }
+
+                $userId = (int) $userId;
+                if ($userId <= 0) {
+                    return 'System';
+                }
+
+                if (array_key_exists($userId, $userCache)) {
+                    return $userCache[$userId] ?: 'System';
+                }
+
+                $user = \App\Models\User::find($userId);
+                $userCache[$userId] = $user?->name;
+                return $userCache[$userId] ?: 'System';
+            };
+
             fwrite($output, "<?xml version=\"1.0\"?>\n");
             fwrite($output, "<?mso-application progid=\"Excel.Sheet\"?>\n");
             fwrite($output, "<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:x=\"urn:schemas-microsoft-com:office:excel\" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:html=\"http://www.w3.org/TR/REC-html40\">\n");
@@ -127,7 +148,6 @@ class EventController extends Controller
                 'Created By',
                 'Performed By',
                 'Action',
-                'Reason',
                 'Performed At',
                 'Location',
                 'Start Time',
@@ -143,9 +163,15 @@ class EventController extends Controller
                 $eventData = is_array($entry->event_data ?? null) ? $entry->event_data : [];
                 $creatorName = $entry->creator->name ?? (isset($eventData['created_by']) ? 'User #' . $eventData['created_by'] : '');
                 $department = $entry->creator->department ?? '';
+
+                $performedById = $entry->performed_by
+                    ?? ($entry->event_data['approved_by'] ?? null)
+                    ?? ($eventData['approved_by'] ?? null);
+
                 $performedBy = $entry->approver->name
                     ?? $entry->performedBy->name
-                    ?? (isset($eventData['approved_by']) ? 'User #' . $eventData['approved_by'] : 'System');
+                    ?? $resolveUserName($performedById);
+
                 $row = [
                     $entry->event_id ?? '',
                     $entry->title ?? '',
@@ -155,10 +181,6 @@ class EventController extends Controller
                     $creatorName,
                     $performedBy,
                     str_replace('_', ' ', (string) ($entry->action ?? '')),
-                    // Prefer the normalized history column; fall back for older records.
-                    $entry->reason
-                        ?? ($eventData['rejection_reason'] ?? null)
-                        ?? ($eventData['reason'] ?? null),
                     $this->safeDateTime($entry->performed_at),
                     $eventData['location'] ?? '',
                     $this->safeTime($eventData['start_time'] ?? null),
@@ -189,14 +211,10 @@ class EventController extends Controller
 
     private function buildAllHistoryCollection()
     {
-        $finishedEvents = Event::with(['creator', 'approver'])
-            ->where('event_date', '<', now()->toDateString())
-            ->whereIn('status', ['approved', 'rejected'])
-            ->orderByDesc('event_date')
-            ->orderByDesc('created_at')
-            ->get();
-
+        // Keep Event History clean: "deleted" actions are not meaningful for auditing
+        // the event lifecycle and must never be shown.
         $historyRecords = EventHistory::with('performedBy')
+            ->where('action', '!=', 'deleted')
             ->orderByDesc('performed_at')
             ->orderByDesc('created_at')
             ->get();
@@ -207,6 +225,60 @@ class EventController extends Controller
             ->pluck('event_id')
             ->filter()
             ->unique();
+
+        $now = now();
+        $today = $now->toDateString();
+        $nowTime = $now->format('H:i:s');
+
+        // Enforce "Event History" separation strictly:
+        // - rejected events always appear
+        // - non-rejected events only appear once their end_datetime has passed
+        // - for ended non-rejected records, normalize status/action for consistent UI + filtering
+        $historyRecords = $historyRecords->filter(function ($record) use ($today, $nowTime) {
+            // Extra safety: ensure "deleted" records never get reclassified.
+            if ((string) ($record->action ?? '') === 'deleted') {
+                return false;
+            }
+
+            $recordStatus = (string) ($record->status ?? '');
+            if ($recordStatus === 'rejected') {
+                return true;
+            }
+
+            $eventData = $record->event_data;
+            if (!is_array($eventData)) {
+                return false;
+            }
+
+            $eventDateValue = $record->event_date ?? ($eventData['event_date'] ?? null);
+            $endTimeValue = $eventData['end_time'] ?? null;
+            if (!$eventDateValue || !$endTimeValue) {
+                return false;
+            }
+
+            try {
+                $eventDate = $eventDateValue instanceof \DateTimeInterface
+                    ? $eventDateValue->format('Y-m-d')
+                    : \Illuminate\Support\Carbon::parse($eventDateValue)->format('Y-m-d');
+
+                $endTime = $endTimeValue instanceof \DateTimeInterface
+                    ? $endTimeValue->format('H:i:s')
+                    : \Illuminate\Support\Carbon::parse((string) $endTimeValue)->format('H:i:s');
+            } catch (\Throwable $e) {
+                return false;
+            }
+
+            $isFinished = $eventDate < $today || ($eventDate === $today && $endTime <= $nowTime);
+            if (!$isFinished) {
+                return false;
+            }
+
+            // Normalize for frontend "Completed" filtering/badges.
+            $record->status = 'completed';
+            $record->action = 'completed';
+
+            return true;
+        })->values();
 
         $creatorIds = $historyRecords->pluck('event_data')->filter()->map(function ($data) {
             return is_array($data) && isset($data['created_by']) ? $data['created_by'] : null;
@@ -232,30 +304,80 @@ class EventController extends Controller
             return $record;
         });
 
-        $finishedEventsHistory = $finishedEvents
-            ->reject(function ($event) use ($loggedRejectedEventIds) {
-                return $event->status === 'rejected' && $loggedRejectedEventIds->contains($event->id);
+        // Completed events are those whose end_datetime (event_date + end_time) is <= now,
+        // regardless of whether they were pending or approved (as long as they are not rejected).
+        $completedEvents = Event::with(['creator', 'approver'])
+            ->where('status', '!=', 'rejected')
+            ->where(function ($q) use ($today, $nowTime) {
+                $q->where('event_date', '<', $today)
+                    ->orWhere(function ($q2) use ($today, $nowTime) {
+                        $q2->where('event_date', $today)
+                            ->where('end_time', '<=', $nowTime);
+                    });
             })
-            ->map(function ($event) {
+            ->orderByDesc('event_date')
+            ->orderByDesc('created_at')
+            ->get();
+
+        // Rejected events must appear in history immediately, even if they were scheduled for the future.
+        $rejectedEvents = Event::with(['creator', 'approver'])
+            ->where('status', 'rejected')
+            ->orderByDesc('event_date')
+            ->orderByDesc('created_at')
+            ->get();
+
+        $completedEventsHistory = $completedEvents->map(function ($event) {
+            $endTime = $event->end_time instanceof \DateTimeInterface
+                ? $event->end_time->format('H:i:s')
+                : (string) $event->end_time;
+
+            $performedAt = \Illuminate\Support\Carbon::parse($event->event_date->toDateString() . ' ' . $endTime);
+
             return (object) [
                 'id' => 'event_' . $event->id,
                 'event_id' => $event->id,
-                'action' => $event->status === 'approved' ? 'approved' : 'rejected',
+                'action' => 'completed',
                 'title' => $event->title,
-                'status' => $event->status,
+                'status' => 'completed',
                 'event_date' => $event->event_date,
-                'performed_at' => $event->approved_at ?? $event->updated_at,
+                'performed_at' => $performedAt,
                 'performed_by' => $event->approved_by,
                 'created_by' => $event->created_by,
                 'performedBy' => $event->approver,
                 'creator' => $event->creator,
-                'reason' => $event->status === 'rejected' ? ($event->rejection_reason ?: null) : null,
+                'reason' => null,
                 'is_finished_event' => true,
                 'event_data' => $event->toArray(),
             ];
         });
 
-        return $historyRecords->concat($finishedEventsHistory)
+        $rejectedEventsHistory = $rejectedEvents
+            ->reject(function ($event) use ($loggedRejectedEventIds) {
+                // If we already have an explicit "rejected" action record, don't duplicate it.
+                return $loggedRejectedEventIds->contains($event->id);
+            })
+            ->map(function ($event) {
+                return (object) [
+                    'id' => 'event_' . $event->id,
+                    'event_id' => $event->id,
+                    'action' => 'rejected',
+                    'title' => $event->title,
+                    'status' => 'rejected',
+                    'event_date' => $event->event_date,
+                    'performed_at' => $event->approved_at ?? $event->updated_at,
+                    'performed_by' => $event->approved_by,
+                    'created_by' => $event->created_by,
+                    'performedBy' => $event->approver,
+                    'creator' => $event->creator,
+                    'reason' => $event->rejection_reason ?: null,
+                    'is_finished_event' => true,
+                    'event_data' => $event->toArray(),
+                ];
+            });
+
+        return $historyRecords
+            ->concat($completedEventsHistory)
+            ->concat($rejectedEventsHistory)
             ->sortByDesc(function ($item) {
                 return $item->performed_at ?? $item->event_date;
             })

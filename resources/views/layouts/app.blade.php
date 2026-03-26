@@ -383,6 +383,74 @@
         .sidebar-toggle-btn:hover {
             box-shadow: 0 4px 12px rgba(163, 177, 138, 0.4);
         }
+
+        /* Dedicated style for all "Edit Category" actions */
+        .btn-edit-category {
+            background-color: var(--ieti-yellow);
+            border: 1px solid var(--ieti-yellow);
+            color: var(--ieti-black);
+            font-weight: 500;
+            transition: box-shadow 0.2s ease, transform 0.2s ease;
+        }
+
+        .btn-edit-category:hover,
+        .btn-edit-category:focus,
+        .btn-edit-category:active {
+            background-color: var(--ieti-yellow);
+            border-color: var(--ieti-yellow);
+            color: var(--ieti-black);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+            transform: translateY(-1px);
+        }
+
+        /* Compact pagination controls (e.g., Event History) */
+        .ietip-history-pagination nav {
+            width: auto !important;
+            max-width: 100%;
+            justify-content: center !important;
+        }
+
+        .ietip-history-pagination .pagination {
+            margin: 0;
+            display: inline-flex !important;
+            flex-wrap: wrap !important;
+            gap: 0.25rem 0.35rem !important;
+            width: auto !important;
+            justify-content: center !important;
+        }
+
+        .ietip-history-pagination .page-item {
+            flex: 0 0 auto !important;
+            width: auto !important;
+        }
+
+        .ietip-history-pagination .page-link {
+            flex: 0 0 auto !important;
+            width: auto !important;
+            height: auto !important;
+            padding: 0.18rem 0.55rem !important;
+            font-size: 0.875rem !important;
+            line-height: 1 !important;
+            min-height: 0 !important;
+            min-width: 2rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+            box-sizing: border-box;
+        }
+
+        .ietip-history-pagination .page-link:focus {
+            box-shadow: 0 0 0 0.2rem rgba(163, 177, 138, 0.25);
+        }
+
+        @media (max-width: 576px) {
+            .ietip-history-pagination .page-link {
+                padding: 0.15rem 0.48rem !important;
+                font-size: 0.8125rem !important;
+                min-width: 1.9rem;
+            }
+        }
     </style>
 </head>
 <body>
