@@ -46,7 +46,7 @@ A comprehensive web-based system for managing school activities and inventory at
 ### Step 1: Clone the Repository
 ```bash
 git clone <repository-url>
-cd scheduling-inventory-system
+cd Scheduling and Inventory System
 ```
 
 ### Step 2: Install Dependencies

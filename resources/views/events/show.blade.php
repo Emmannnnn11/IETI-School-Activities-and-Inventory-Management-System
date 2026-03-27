@@ -14,12 +14,6 @@
                         <i class="fas fa-arrow-left me-2"></i>
                         Back to Events
                     </a>
-                    @if(Auth::user()->canCreateEvents() && ($event->created_by === Auth::id() || Auth::user()->isAdmin()) && $event->status === 'pending')
-                    <a href="{{ route('events.edit', $event) }}" class="btn btn-warning">
-                        <i class="fas fa-edit me-2"></i>
-                        Edit Event
-                    </a>
-                    @endif
                 </div>
             </div>
         </div>

@@ -204,16 +204,6 @@
                             </div>
                         </div>
                         
-                        @if(Auth::user() && Auth::user()->isAdmin() && ($entry->status ?? '') === 'rejected' && !empty($entry->event_id))
-                            <form action="{{ route('events.destroy', $entry->event_id) }}" method="POST" class="mt-3"
-                                  onsubmit="return confirm('Delete this rejected event? This action cannot be undone, but a history entry will be created.');">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-outline-danger w-100">
-                                    <i class="fas fa-trash me-1"></i> Delete Rejected Event
-                                </button>
-                            </form>
-                        @endif
                     </div>
                 </div>
             </div>
