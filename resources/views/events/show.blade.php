@@ -78,6 +78,14 @@
                         </div>
                     </div>
 
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Department</h6>
+                            <p class="h6">{{ $event->department ?: ($event->creator->department ?? 'N/A') }}</p>
+                        </div>
+                    </div>
+
                     @if($event->approver)
                     <hr>
                     <div class="row">

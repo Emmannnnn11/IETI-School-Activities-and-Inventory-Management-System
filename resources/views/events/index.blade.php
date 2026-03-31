@@ -19,11 +19,18 @@
         </div>
     </div>
 
+    @php
+        $eventsCollection = $events->getCollection();
+        $isDesc = ($direction ?? 'asc') === 'desc';
+        $nextTitleDirection = (($sort ?? 'event_date') === 'title' && !$isDesc) ? 'desc' : 'asc';
+        $nextDateDirection = (($sort ?? 'event_date') === 'event_date' && !$isDesc) ? 'desc' : 'asc';
+    @endphp
+
     {{-- Show pending events for admin approval --}}
     @if(Auth::user()->canApproveEvents())
         @php
             // Filter pending events from the collection
-            $pendingEvents = $events->filter(function($event) {
+            $pendingEvents = $eventsCollection->filter(function($event) {
                 return $event->status === 'pending';
             });
         @endphp
@@ -46,6 +53,7 @@
                                         <th>Event</th>
                                         <th>Date & Time</th>
                                         <th>Location</th>
+                                        <th>Department</th>
                                         <th>Created By</th>
                                         <th>Actions</th>
                                     </tr>
@@ -71,6 +79,7 @@
                                             </div>
                                         </td>
                                         <td>{{ $event->location }}</td>
+                                        <td>{{ $event->department ?: ($event->creator->department ?? 'N/A') }}</td>
                                         <td>{{ $event->creator->name }}</td>
                                         <td>
                                             <div class="btn-group" role="group">
@@ -132,20 +141,57 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-list me-2"></i>
-                        All Events
-                    </h5>
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <h5 class="mb-0">
+                            <i class="fas fa-list me-2"></i>
+                            All Events
+                        </h5>
+                        <form method="GET" action="{{ route('events.index') }}" class="row g-2 align-items-center">
+                            <input type="hidden" name="sort" value="{{ $sort ?? 'event_date' }}">
+                            <input type="hidden" name="direction" value="{{ $direction ?? 'asc' }}">
+                            <div class="col-auto">
+                                <input type="text" name="search" class="form-control form-control-sm" placeholder="Search event or venue" value="{{ $search ?? '' }}">
+                            </div>
+                            <div class="col-auto">
+                                <select name="status" class="form-select form-select-sm">
+                                    <option value="">All statuses</option>
+                                    <option value="approved" {{ ($status ?? '') === 'approved' ? 'selected' : '' }}>Approved</option>
+                                    <option value="pending" {{ ($status ?? '') === 'pending' ? 'selected' : '' }}>Pending</option>
+                                </select>
+                            </div>
+                            <div class="col-auto">
+                                <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+                                @if(($search ?? '') !== '' || ($status ?? '') !== '')
+                                    <a href="{{ route('events.index') }}" class="btn btn-sm btn-outline-secondary">Clear</a>
+                                @endif
+                            </div>
+                        </form>
+                    </div>
                 </div>
                 <div class="card-body">
                     @if($events->count() > 0)
                     <div class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="table table-hover align-middle">
                             <thead>
                                 <tr>
-                                    <th>Event</th>
-                                    <th>Date & Time</th>
+                                    <th>
+                                        <a href="{{ route('events.index', array_merge(request()->query(), ['sort' => 'title', 'direction' => $nextTitleDirection])) }}" class="text-decoration-none text-dark">
+                                            Event
+                                            @if(($sort ?? 'event_date') === 'title')
+                                                <i class="fas fa-sort-{{ $isDesc ? 'down' : 'up' }} ms-1"></i>
+                                            @endif
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="{{ route('events.index', array_merge(request()->query(), ['sort' => 'event_date', 'direction' => $nextDateDirection])) }}" class="text-decoration-none text-dark">
+                                            Date & Time
+                                            @if(($sort ?? 'event_date') === 'event_date')
+                                                <i class="fas fa-sort-{{ $isDesc ? 'down' : 'up' }} ms-1"></i>
+                                            @endif
+                                        </a>
+                                    </th>
                                     <th>Location</th>
+                                    <th>Department</th>
                                     <th>Status</th>
                                     <th>Created By</th>
                                     <th>Actions</th>
@@ -172,6 +218,7 @@
                                         </div>
                                     </td>
                                     <td>{{ $event->location }}</td>
+                                    <td>{{ $event->department ?: ($event->creator->department ?? 'N/A') }}</td>
                                     <td>
                                         <span class="badge {{ $event->status_badge_class }}">
                                             {{ ucfirst($event->status) }}
@@ -245,6 +292,9 @@
                                 @endforeach
                             </tbody>
                         </table>
+                    </div>
+                    <div class="mt-3">
+                        {{ $events->links('pagination::bootstrap-5') }}
                     </div>
                     @else
                     <div class="text-center py-5">

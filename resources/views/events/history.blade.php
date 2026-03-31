@@ -13,45 +13,41 @@
         </a>
     </div>
 
-    <div class="mb-3">
-    <h5 class="text-dark fw-bold fs-5 mb-0">
-    <i class="fas fa-archive me-2"></i>
-    Archived Actions
-    </h5>
-    </div>
+    @php
+        $isDesc = ($filters['direction'] ?? 'desc') === 'desc';
+        $nextTitleDirection = (($filters['sort'] ?? 'event_date') === 'title' && !$isDesc) ? 'desc' : 'asc';
+        $nextDateDirection = (($filters['sort'] ?? 'event_date') === 'event_date' && !$isDesc) ? 'desc' : 'asc';
+        $hasHistoryRecords = $history->total() > 0;
+        $selectedStatus = $filters['status'] ?? '';
+    @endphp
 
     <div class="card shadow-sm border mb-4">
         <div class="card-body">
-            <form method="get" action="{{ route('events.history') }}" class="row g-3 align-items-end">
+            <form method="GET" action="{{ route('events.history') }}" class="row g-3 align-items-end">
+                <input type="hidden" name="sort" value="{{ $filters['sort'] ?? 'event_date' }}">
+                <input type="hidden" name="direction" value="{{ $filters['direction'] ?? 'desc' }}">
+
                 <div class="col-12 col-md-6 col-lg-3">
-                    <label for="search" class="form-label small text-muted">
-                        <i class="fas fa-search me-1"></i> Event name
-                    </label>
+                    <label for="search" class="form-label small text-muted">Search</label>
                     <input type="text" name="search" id="search" class="form-control form-control-sm"
-                        placeholder="Search by event name..."
+                        placeholder="Search event name"
                         value="{{ old('search', $filters['search'] ?? '') }}">
                 </div>
                 <div class="col-12 col-md-6 col-lg-2">
-                    <label for="event_date" class="form-label small text-muted">
-                        <i class="fas fa-calendar-day me-1"></i> Date
-                    </label>
+                    <label for="event_date" class="form-label small text-muted">Date</label>
                     <input type="date" name="event_date" id="event_date" class="form-control form-control-sm"
                         value="{{ old('event_date', $filters['event_date'] ?? '') }}">
                 </div>
                 <div class="col-12 col-md-6 col-lg-2">
-                    <label for="status" class="form-label small text-muted">
-                        <i class="fas fa-flag me-1"></i> Status
-                    </label>
+                    <label for="status" class="form-label small text-muted">Status</label>
                     <select name="status" id="status" class="form-select form-select-sm">
                         <option value="">All statuses</option>
-                        <option value="completed" {{ ($filters['status'] ?? '') === 'completed' ? 'selected' : '' }}>Completed</option>
-                        <option value="rejected" {{ ($filters['status'] ?? '') === 'rejected' ? 'selected' : '' }}>Rejected</option>
+                        <option value="completed" {{ $selectedStatus === 'completed' ? 'selected' : '' }}>Completed</option>
+                        <option value="rejected" {{ $selectedStatus === 'rejected' ? 'selected' : '' }}>Rejected</option>
                     </select>
                 </div>
                 <div class="col-12 col-md-6 col-lg-2">
-                    <label for="department" class="form-label small text-muted">
-                        <i class="fas fa-building me-1"></i> Department
-                    </label>
+                    <label for="department" class="form-label small text-muted">Department</label>
                     <select name="department" id="department" class="form-select form-select-sm">
                         <option value="">All departments</option>
                         @foreach($departments as $dept)
@@ -59,166 +55,96 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-12 col-md-6 col-lg-1">
-                    <button type="submit" class="btn btn-primary btn-sm w-100">
-                        <i class="fas fa-search me-1"></i> Search
+                <div class="col-12 col-md-6 col-lg-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm flex-fill">
+                        <i class="fas fa-search me-1"></i> Apply
                     </button>
-                </div>
-                <div class="col-12 col-md-6 col-lg-2">
-                    @php $hasHistoryRecords = $history->total() > 0; @endphp
                     <a
-                        href="{{ $hasHistoryRecords ? route('events.history.export', request()->only(['search', 'event_date', 'status', 'department'])) : '#' }}"
-                        class="btn btn-success btn-sm w-100 {{ $hasHistoryRecords ? '' : 'disabled' }}"
+                        href="{{ $hasHistoryRecords ? route('events.history.export', request()->only(['search', 'event_date', 'status', 'department', 'sort', 'direction'])) : '#' }}"
+                        class="btn btn-success btn-sm flex-fill {{ $hasHistoryRecords ? '' : 'disabled' }}"
                         @if(!$hasHistoryRecords) aria-disabled="true" tabindex="-1" title="No records to export" @endif
                     >
                         <i class="fas fa-file-export me-1"></i> Export
                     </a>
+                    <a href="{{ route('events.history') }}" class="btn btn-outline-secondary btn-sm flex-fill">Clear</a>
                 </div>
-                @if(($filters['search'] ?? '') !== '' || ($filters['event_date'] ?? '') !== '' || ($filters['status'] ?? '') !== '' || ($filters['department'] ?? '') !== '')
-                <div class="col-12 col-lg-1">
-                    <a href="{{ route('events.history') }}" class="btn btn-secondary btn-sm w-100">Clear</a>
-                </div>
-                @endif
             </form>
-            @if(!$hasHistoryRecords)
-                <small class="text-muted d-block mt-2">
-                    No filtered records available to export.
-                </small>
-            @endif
         </div>
     </div>
 
     @if($history->count() > 0)
-        <div class="row g-3">
-            @foreach($history as $entry)
-            @php
-                $data = is_array($entry->event_data ?? null) ? $entry->event_data : [];
-                $location = $data['location'] ?? null;
-                $startTime = $data['start_time'] ?? null;
-                $endTime = $data['end_time'] ?? null;
-                $timeStr = null;
-                if ($startTime || $endTime) {
-                    try {
-                        $start = $startTime instanceof \DateTimeInterface ? \Illuminate\Support\Carbon::parse($startTime)->format('g:i A') : (\Illuminate\Support\Carbon::parse($startTime)->format('g:i A') ?? '');
-                    } catch (\Exception $e) { $start = ''; }
-                    try {
-                        $end = $endTime instanceof \DateTimeInterface ? \Illuminate\Support\Carbon::parse($endTime)->format('g:i A') : (\Illuminate\Support\Carbon::parse($endTime)->format('g:i A') ?? '');
-                    } catch (\Exception $e) { $end = ''; }
-                    $timeStr = trim($start . ($end ? ' – ' . $end : ''));
-                }
-                $creatorName = null;
-                if (isset($entry->creator) && $entry->creator) {
-                    $creatorName = $entry->creator->name;
-                } elseif (!empty($data['created_by'])) {
-                    $u = \App\Models\User::find($data['created_by']);
-                    $creatorName = $u ? $u->name : 'User #' . $data['created_by'];
-                }
-                $performerName = null;
-                if (isset($entry->approver) && $entry->approver) {
-                    $performerName = $entry->approver->name;
-                } elseif (isset($entry->performedBy) && $entry->performedBy) {
-                    $performerName = $entry->performedBy->name;
-                } elseif (!empty($data['approved_by'])) {
-                    $u = \App\Models\User::find($data['approved_by']);
-                    $performerName = $u ? $u->name : 'User #' . $data['approved_by'];
-                }
-                if (!$performerName) {
-                    $performerName = 'System';
-                }
-                $reason = $entry->reason ?? ($data['rejection_reason'] ?? null);
-                $entryId = $entry->id ?? ('entry_' . $entry->event_id . '_' . ($entry->performed_at ? $entry->performed_at->timestamp : 0));
-            @endphp
-            <div class="col-12 col-md-6 col-lg-4">
-                <div class="card h-100 shadow-sm border">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h6 class="card-title mb-0 text-dark">
-                                <i class="fas fa-calendar-alt text-primary me-2"></i>
-                                {{ $entry->title }}
-                            </h6>
-                            <span class="badge
-                                @if($entry->status === 'completed') bg-success
-                                @elseif($entry->status === 'rejected') bg-danger
-                                @else bg-secondary
-                                @endif">
-                                {{ ucfirst($entry->status) }}
-                            </span>
-                        </div>
-                        <small class="text-muted d-block mb-2">Ref #{{ $entry->event_id ?? 'N/A' }}</small>
-
-                        <ul class="list-unstyled small mb-0">
-                            <li class="mb-1">
-                                <i class="fas fa-calendar-day text-muted me-2" style="width: 1.25rem;"></i>
-                                <strong>Date:</strong> {{ optional($entry->event_date)->format('M d, Y') ?? '—' }}
-                            </li>
-                            @if($timeStr)
-                            <li class="mb-1">
-                                <i class="fas fa-clock text-muted me-2" style="width: 1.25rem;"></i>
-                                <strong>Time:</strong> {{ $timeStr }}
-                            </li>
-                            @endif
-                            @if($location)
-                            <li class="mb-1">
-                                <i class="fas fa-map-marker-alt text-muted me-2" style="width: 1.25rem;"></i>
-                                <strong>Location:</strong> {{ $location }}
-                            </li>
-                            @endif
-                            <li class="mb-1">
-                                <i class="fas fa-user text-muted me-2" style="width: 1.25rem;"></i>
-                                <strong>Created by:</strong> {{ $creatorName ?? '—' }}
-                            </li>
-                        </ul>
-
-                        <div class="mt-3 pt-2 border-top">
-                            <button class="btn btn-sm btn-secondary w-100" type="button"
-                                data-bs-toggle="collapse" data-bs-target="#historyLog{{ $entryId }}"
-                                aria-expanded="false" aria-controls="historyLog{{ $entryId }}">
-                                <i class="fas fa-chevron-down me-1"></i> Show History
-                            </button>
-                            <div class="collapse mt-2" id="historyLog{{ $entryId }}">
-                                <div class="small bg-light rounded p-2">
-                                    <div class="d-flex flex-wrap align-items-center gap-1">
-                                        @if($entry->action === 'completed')
-                                            <i class="fas fa-check-circle text-success me-2"></i>
-                                        @elseif($entry->action === 'approved')
-                                            <i class="fas fa-check-circle text-success me-2"></i>
-                                        @elseif($entry->action === 'rejected')
-                                            <i class="fas fa-times-circle text-danger me-2"></i>
-                                        @elseif($entry->action === 'deleted')
-                                            <i class="fas fa-trash-alt text-secondary me-2"></i>
-                                        @elseif($entry->action === 'submitted')
-                                            <i class="fas fa-paper-plane text-info me-2"></i>
-                                        @else
-                                            <i class="fas fa-plus-circle text-primary me-2"></i>
+        <div class="card shadow-sm border">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>
+                                    <a href="{{ route('events.history', array_merge(request()->query(), ['sort' => 'title', 'direction' => $nextTitleDirection])) }}" class="text-decoration-none text-dark">
+                                        Event Name
+                                        @if(($filters['sort'] ?? 'event_date') === 'title')
+                                            <i class="fas fa-sort-{{ $isDesc ? 'down' : 'up' }} ms-1"></i>
                                         @endif
-                                        <span class="text-capitalize">{{ str_replace('_', ' ', $entry->action) }}</span>
-                                        <span class="text-muted">by {{ $performerName }}</span>
-                                        <span class="text-muted">on {{ optional($entry->performed_at)->format('M d, Y \a\t g:i A') ?? '—' }}</span>
-                                    </div>
-                                    @if($entry->action === 'rejected' && !empty($reason))
-                                        <div class="mt-2 text-danger small">
-                                            – Reason: {{ $reason }}
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="{{ route('events.history', array_merge(request()->query(), ['sort' => 'event_date', 'direction' => $nextDateDirection])) }}" class="text-decoration-none text-dark">
+                                        Date
+                                        @if(($filters['sort'] ?? 'event_date') === 'event_date')
+                                            <i class="fas fa-sort-{{ $isDesc ? 'down' : 'up' }} ms-1"></i>
+                                        @endif
+                                    </a>
+                                </th>
+                                <th>Venue</th>
+                                <th>Status</th>
+                                <th class="text-nowrap">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($history as $entry)
+                                @php
+                                    $data = is_array($entry->event_data ?? null) ? $entry->event_data : [];
+                                    $statusLabel = ucfirst((string) ($entry->status ?? ''));
+                                    $statusClass = ($entry->status ?? '') === 'completed'
+                                        ? 'bg-success'
+                                        : (($entry->status ?? '') === 'rejected' ? 'bg-danger' : 'bg-secondary');
+                                    $canViewEvent = !empty($entry->event_id) && in_array((int) $entry->event_id, $viewableEventIds ?? [], true);
+                                @endphp
+                                <tr>
+                                    <td class="fw-semibold">{{ $entry->title }}</td>
+                                    <td>{{ optional($entry->event_date)->format('M d, Y') ?? '—' }}</td>
+                                    <td>{{ $data['location'] ?? '—' }}</td>
+                                    <td><span class="badge {{ $statusClass }}">{{ $statusLabel }}</span></td>
+                                    <td>
+                                        <div class="d-flex flex-wrap gap-2">
+                                            @if($canViewEvent)
+                                                <a href="{{ route('events.show', $entry->event_id) }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-eye me-1"></i> View
+                                                </a>
+                                            @else
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Event no longer exists">
+                                                    <i class="fas fa-eye me-1"></i> View
+                                                </button>
+                                            @endif
                                         </div>
-                                    @endif
-                                </div>
-                            </div>
-                        </div>
-                        
-                    </div>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
             </div>
-            @endforeach
         </div>
 
-        <div class="mt-4 d-flex justify-content-center align-items-center ietip-history-pagination">
-            {{ $history->links('pagination::compact-bootstrap-5') }}
+        <div class="mt-3 d-flex justify-content-center">
+            {{ $history->links('pagination::bootstrap-5') }}
         </div>
     @else
         <div class="card border-0 shadow-sm">
             <div class="card-body text-center py-5">
                 <i class="fas fa-folder-open fa-4x text-muted mb-3"></i>
                 <h5 class="text-muted">No history records yet</h5>
-                    <p class="text-muted mb-0">Completed or rejected events will appear here once available.</p>
+                <p class="text-muted mb-0">Completed or rejected events will appear here once available.</p>
             </div>
         </div>
     @endif

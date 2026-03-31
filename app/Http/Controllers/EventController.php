@@ -14,6 +14,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EventController extends Controller
 {
+    private const AUTO_REJECTION_REASON = 'This event was automatically rejected because another event with higher priority has already been approved for the same schedule.';
+
     /**
      * Create a new controller instance.
      *
@@ -29,19 +31,40 @@ class EventController extends Controller
      */
     public function index()
     {
-        $user = Auth::user();
-        
         // Active/upcoming events only:
         // - exclude rejected events (they belong in history)
         // - use end_date + end_time vs now() to exclude completed/ended events
-        $events = Event::with(['creator', 'approver', 'eventItems.inventoryItem'])
-            ->where('status', '!=', 'rejected')
-            ->future()
-            ->orderBy('event_date', 'asc')
-            ->orderBy('created_at', 'desc') // Show newest events first for same date
-            ->get();
+        $sort = request()->input('sort', 'event_date');
+        $direction = strtolower((string) request()->input('direction', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $search = trim((string) request()->input('search', ''));
+        $status = trim((string) request()->input('status', ''));
 
-        return view('events.index', compact('events'));
+        if (!in_array($sort, ['title', 'event_date'], true)) {
+            $sort = 'event_date';
+        }
+
+        $eventsQuery = Event::with(['creator', 'approver', 'eventItems.inventoryItem'])
+            ->where('status', '!=', 'rejected')
+            ->future();
+
+        if ($search !== '') {
+            $eventsQuery->where(function ($query) use ($search) {
+                $query->where('title', 'like', '%' . $search . '%')
+                    ->orWhere('location', 'like', '%' . $search . '%');
+            });
+        }
+
+        if ($status !== '' && in_array($status, ['approved', 'pending'], true)) {
+            $eventsQuery->where('status', $status);
+        }
+
+        $events = $eventsQuery
+            ->orderBy($sort, $direction)
+            ->orderBy('created_at', 'desc') // Show newest events first for same sort key
+            ->paginate(10)
+            ->appends(request()->query());
+
+        return view('events.index', compact('events', 'sort', 'direction', 'search', 'status'));
     }
 
     /**
@@ -61,7 +84,7 @@ class EventController extends Controller
 
         // Manual pagination on filtered results
         $page = request()->get('page', 1);
-        $perPage = 20;
+        $perPage = 10;
         $offset = ($page - 1) * $perPage;
         $items = $filtered->slice($offset, $perPage)->values();
         $total = $filtered->count();
@@ -75,6 +98,11 @@ class EventController extends Controller
             ['path' => request()->url(), 'query' => request()->query()]
         );
 
+        $viewableEventIds = Event::query()
+            ->whereIn('id', $items->pluck('event_id')->filter()->unique()->values())
+            ->pluck('id')
+            ->all();
+
         $departments = \App\Models\User::whereNotNull('department')
             ->where('department', '!=', '')
             ->orderBy('department')
@@ -82,7 +110,7 @@ class EventController extends Controller
             ->unique()
             ->values();
 
-        return view('events.history', compact('history', 'departments', 'filters'));
+        return view('events.history', compact('history', 'departments', 'filters', 'viewableEventIds'));
     }
 
     /**
@@ -201,11 +229,21 @@ class EventController extends Controller
 
     private function extractHistoryFilters(Request $request): array
     {
+        $sort = (string) $request->input('sort', 'event_date');
+        if (!in_array($sort, ['title', 'event_date'], true)) {
+            $sort = 'event_date';
+        }
+
+        $direction = strtolower((string) $request->input('direction', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $status = (string) $request->input('status', '');
+
         return [
             'search' => (string) $request->input('search', ''),
             'event_date' => (string) $request->input('event_date', ''),
-            'status' => (string) $request->input('status', ''),
+            'status' => $status,
             'department' => (string) $request->input('department', ''),
+            'sort' => $sort,
+            'direction' => $direction,
         ];
     }
 
@@ -386,7 +424,7 @@ class EventController extends Controller
 
     private function applyHistoryFilters($allHistory, array $filters)
     {
-        return $allHistory->filter(function ($item) use ($filters) {
+        $filtered = $allHistory->filter(function ($item) use ($filters) {
             if ($filters['search'] !== '' && stripos($item->title ?? '', $filters['search']) === false) {
                 return false;
             }
@@ -413,7 +451,28 @@ class EventController extends Controller
             }
 
             return true;
-        })->values();
+        });
+
+        if (($filters['sort'] ?? 'event_date') === 'title') {
+            $sorted = $filtered->sortBy(function ($item) {
+                return strtolower((string) ($item->title ?? ''));
+            }, SORT_NATURAL, ($filters['direction'] ?? 'desc') === 'desc');
+        } else {
+            $sorted = $filtered->sortBy(function ($item) {
+                $date = $item->event_date ?? null;
+                if ($date instanceof \DateTimeInterface) {
+                    return $date->getTimestamp();
+                }
+
+                try {
+                    return \Illuminate\Support\Carbon::parse($date)->getTimestamp();
+                } catch (\Throwable $e) {
+                    return 0;
+                }
+            }, SORT_NUMERIC, ($filters['direction'] ?? 'desc') === 'desc');
+        }
+
+        return $sorted->values();
     }
 
     private function safeDate($value): string
@@ -577,11 +636,17 @@ class EventController extends Controller
                 'start_time' => $validated['start_time'],
                 'end_time' => $validated['end_time'],
                 'location' => $validated['location'],
+                'department' => $user->department,
                 'status' => $status,
                 'created_by' => $user->id,
                 'approved_by' => $approved_by,
                 'approved_at' => $approved_at,
             ]);
+
+            $autoRejectedCount = 0;
+            if ($status === 'approved') {
+                $autoRejectedCount = $this->autoRejectConflictingPendingEvents($event, $user->id);
+            }
 
             Log::info('Event created successfully', [
                 'event_id' => $event->id,
@@ -626,6 +691,10 @@ class EventController extends Controller
             $message = $user->isAdmin()
                 ? 'Event "' . $event->title . '" has been created and automatically approved! It will appear in the events list below.'
                 : 'Event "' . $event->title . '" has been created successfully and is pending admin approval. It will appear in the events list below.';
+
+            if ($autoRejectedCount > 0) {
+                $message .= ' ' . $autoRejectedCount . ' conflicting pending event(s) were automatically rejected.';
+            }
 
             // Use session()->flash() to ensure message persists
             session()->flash('success', $message);
@@ -925,6 +994,8 @@ class EventController extends Controller
         DB::beginTransaction();
         
         try {
+            $wasApproved = false;
+
             // If item-level decisions are provided, process them
             if ($request->has('event_items')) {
                 $allItemsApproved = true;
@@ -987,6 +1058,7 @@ class EventController extends Controller
                         'approved_by' => $user->id,
                         'approved_at' => now(),
                     ]);
+                    $wasApproved = true;
                     
                     $message = $allItemsApproved 
                         ? 'Event approved successfully with all requested items.'
@@ -1033,10 +1105,19 @@ class EventController extends Controller
                     'approved_by' => $user->id,
                     'approved_at' => now(),
                 ]);
+                $wasApproved = true;
                 
                 $message = $allApproved 
                     ? 'Event approved successfully with all requested items.'
                     : 'Event approved successfully. Some items were not available and have been rejected.';
+            }
+
+            $autoRejectedCount = 0;
+            if ($wasApproved) {
+                $autoRejectedCount = $this->autoRejectConflictingPendingEvents($event, $user->id);
+                if ($autoRejectedCount > 0) {
+                    $message .= ' ' . $autoRejectedCount . ' conflicting pending event(s) were automatically rejected.';
+                }
             }
 
             DB::commit();
@@ -1203,5 +1284,47 @@ class EventController extends Controller
             return redirect()->back()
                 ->with('error', 'Failed to return item. Please try again.');
         }
+    }
+
+    /**
+     * Automatically reject pending events that overlap with an approved event.
+     */
+    private function autoRejectConflictingPendingEvents(Event $approvedEvent, int $performedBy): int
+    {
+        $now = now();
+        $conflictingPendingEvents = Event::query()
+            ->where('status', 'pending')
+            ->where('id', '!=', $approvedEvent->id)
+            ->whereDate('event_date', $approvedEvent->event_date)
+            ->where('start_time', '<', $approvedEvent->end_time)
+            ->where('end_time', '>', $approvedEvent->start_time)
+            ->lockForUpdate()
+            ->get();
+
+        $count = 0;
+        foreach ($conflictingPendingEvents as $conflictingEvent) {
+            $conflictingEvent->update([
+                'status' => 'rejected',
+                'approved_by' => $performedBy,
+                'approved_at' => $now,
+                'rejection_reason' => self::AUTO_REJECTION_REASON,
+            ]);
+
+            EventHistory::create([
+                'event_id' => $conflictingEvent->id,
+                'action' => 'rejected',
+                'title' => $conflictingEvent->title,
+                'status' => 'rejected',
+                'event_date' => $conflictingEvent->event_date,
+                'event_data' => $conflictingEvent->toArray(),
+                'reason' => self::AUTO_REJECTION_REASON,
+                'performed_by' => $performedBy,
+                'performed_at' => $now,
+            ]);
+
+            $count++;
+        }
+
+        return $count;
     }
 }

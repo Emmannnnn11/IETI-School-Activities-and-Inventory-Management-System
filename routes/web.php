@@ -99,12 +99,22 @@ Route::middleware(['auth'])->group(function () {
             ->get();
         
         return response()->json($events->map(function ($event) {
+            $department = $event->department ?: ($event->creator->department ?? null);
+            $departmentColor = match ($department) {
+                'Junior High School' => '#ff69b4',
+                'Senior High School' => '#1e90ff',
+                'College' => '#D3D3FF',
+                default => null,
+            };
+
             return [
                 'id' => $event->id,
                 'title' => $event->title,
                 'start' => $event->event_date->format('Y-m-d'),
                 'color' => $event->status_color,
                 'status' => $event->status,
+                'department' => $department,
+                'department_color' => $departmentColor,
                 'location' => $event->location,
                 'start_time' => $event->start_time,
                 'end_time' => $event->end_time,

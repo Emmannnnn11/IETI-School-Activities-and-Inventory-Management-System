@@ -22,8 +22,8 @@
             <div class="card text-center">
                 <div class="card-body">
                     <i class="fas fa-calendar-check fa-3x text-success mb-3"></i>
-                    <h4 class="text-success">{{ $events->where('status', 'approved')->count() }}</h4>
-                    <p class="text-muted mb-0">Approved Events</p>
+                    <h4 class="text-success">{{ $events->count() }}</h4>
+                    <p class="text-muted mb-0">Upcoming events</p>
                 </div>
             </div>
         </div>
@@ -67,6 +67,20 @@
                 </div>
                 <div class="card-body">
                     <div id="calendar"></div>
+                    <div class="mt-3 d-flex flex-wrap gap-3 small">
+                        <span class="d-inline-flex align-items-center">
+                            <span class="me-2 rounded-circle" style="width: 12px; height: 12px; background-color: #ff69b4;"></span>
+                            Junior High School
+                        </span>
+                        <span class="d-inline-flex align-items-center">
+                            <span class="me-2 rounded-circle" style="width: 12px; height: 12px; background-color: #1e90ff;"></span>
+                            Senior High School
+                        </span>
+                        <span class="d-inline-flex align-items-center">
+                            <span class="me-2 rounded-circle" style="width: 12px; height: 12px; background-color: #D3D3FF;"></span>
+                            College
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -81,17 +95,22 @@
                 <div class="card-body">
                     @if($events->count() > 0)
                         @foreach($events->take(5) as $event)
-                        <div class="d-flex align-items-center mb-3 p-2 rounded" style="background-color: #f8f9fa;">
-                            <div class="me-3">
-                                <span class="badge {{ $event->status_badge_class }}">{{ ucfirst($event->status) }}</span>
+                        <a href="{{ route('events.show', $event) }}" class="text-decoration-none text-dark d-block">
+                            <div class="d-flex align-items-center mb-3 p-2 rounded" style="background-color: #f8f9fa;">
+                                <div class="me-3">
+                                    <span class="badge {{ $event->status_badge_class }}">Upcoming Events</span>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">{{ $event->title }}</h6>
+                                    <small class="text-muted">
+                                        {{ $event->event_date->format('M d, Y') }} at {{ $event->start_time }}
+                                    </small>
+                                    <small class="text-muted d-block">
+                                        Department: {{ $event->department ?: ($event->creator->department ?? 'N/A') }}
+                                    </small>
+                                </div>
                             </div>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-1">{{ $event->title }}</h6>
-                                <small class="text-muted">
-                                    {{ $event->event_date->format('M d, Y') }} at {{ $event->start_time }}
-                                </small>
-                            </div>
-                        </div>
+                        </a>
                         @endforeach
                     @else
                         <p class="text-muted text-center">No events found.</p>
@@ -201,6 +220,11 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (info.event.extendedProps.status === 'rejected') {
                 info.el.style.backgroundColor = '#dc3545';
                 info.el.style.color = 'white';
+            }
+
+            // Department color-coding accent (does not override status colors)
+            if (info.event.extendedProps.department_color) {
+                info.el.style.borderLeft = '5px solid ' + info.event.extendedProps.department_color;
             }
         }
     });
