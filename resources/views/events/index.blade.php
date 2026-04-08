@@ -53,7 +53,7 @@
                                         <th>Event</th>
                                         <th>Date & Time</th>
                                         <th>Location</th>
-                                        <th>Department</th>
+                                        <th>Role</th>
                                         <th>Created By</th>
                                         <th>Actions</th>
                                     </tr>
@@ -79,7 +79,7 @@
                                             </div>
                                         </td>
                                         <td>{{ $event->location }}</td>
-                                        <td>{{ $event->department ?: ($event->creator->department ?? 'N/A') }}</td>
+                                        <td>{{ $event->scheduler_role_label }}</td>
                                         <td>{{ $event->creator->name }}</td>
                                         <td>
                                             <div class="btn-group" role="group">
@@ -191,7 +191,7 @@
                                         </a>
                                     </th>
                                     <th>Location</th>
-                                    <th>Department</th>
+                                    <th>Role</th>
                                     <th>Status</th>
                                     <th>Created By</th>
                                     <th>Actions</th>
@@ -218,7 +218,7 @@
                                         </div>
                                     </td>
                                     <td>{{ $event->location }}</td>
-                                    <td>{{ $event->department ?: ($event->creator->department ?? 'N/A') }}</td>
+                                    <td>{{ $event->scheduler_role_label }}</td>
                                     <td>
                                         <span class="badge {{ $event->status_badge_class }}">
                                             {{ ucfirst($event->status) }}

@@ -47,11 +47,13 @@
                     </select>
                 </div>
                 <div class="col-12 col-md-6 col-lg-2">
-                    <label for="department" class="form-label small text-muted">Department</label>
-                    <select name="department" id="department" class="form-select form-select-sm">
-                        <option value="">All departments</option>
-                        @foreach($departments as $dept)
-                            <option value="{{ $dept }}" {{ ($filters['department'] ?? '') === $dept ? 'selected' : '' }}>{{ $dept }}</option>
+                    <label for="role" class="form-label small text-muted">Role</label>
+                    <select name="role" id="role" class="form-select form-select-sm">
+                        <option value="">All roles</option>
+                        @foreach($roles as $role)
+                            <option value="{{ $role }}" {{ ($filters['role'] ?? '') === $role ? 'selected' : '' }}>
+                                {{ ucwords(str_replace('_', ' ', $role)) }}
+                            </option>
                         @endforeach
                     </select>
                 </div>
@@ -60,7 +62,7 @@
                         <i class="fas fa-search me-1"></i> Apply
                     </button>
                     <a
-                        href="{{ $hasHistoryRecords ? route('events.history.export', request()->only(['search', 'event_date', 'status', 'department', 'sort', 'direction'])) : '#' }}"
+                        href="{{ $hasHistoryRecords ? route('events.history.export', request()->only(['search', 'event_date', 'status', 'role', 'sort', 'direction'])) : '#' }}"
                         class="btn btn-success btn-sm flex-fill {{ $hasHistoryRecords ? '' : 'disabled' }}"
                         @if(!$hasHistoryRecords) aria-disabled="true" tabindex="-1" title="No records to export" @endif
                     >

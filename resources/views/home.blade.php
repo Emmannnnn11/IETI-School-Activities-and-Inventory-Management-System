@@ -172,7 +172,7 @@
                                         {{ $event->date_range_label }} at {{ \Carbon\Carbon::parse($event->start_time)->format('g:i A') }}
                                     </small>
                                     <small class="text-muted d-block">
-                                        Department: {{ $event->department ?: ($event->creator->department ?? 'N/A') }}
+                                        Role: {{ $event->scheduler_role_label }}
                                     </small>
                                 </div>
                             </div>
@@ -395,7 +395,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function buildTooltipHtml(event) {
         var props = event.extendedProps || {};
-        var scheduler = props.scheduler_department || props.department || props.creator_role || '—';
+        var scheduler = props.scheduler_role || props.creator_role || props.scheduler_department || props.department || '—';
         var location = props.location || '—';
         var startTime = formatTime(props.start_time);
         var endTime = formatTime(props.end_time);

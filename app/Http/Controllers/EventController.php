@@ -115,14 +115,14 @@ class EventController extends Controller
             ->pluck('id')
             ->all();
 
-        $departments = \App\Models\User::whereNotNull('department')
-            ->where('department', '!=', '')
-            ->orderBy('department')
-            ->pluck('department')
+        $roles = \App\Models\User::whereNotNull('role')
+            ->where('role', '!=', '')
+            ->orderBy('role')
+            ->pluck('role')
             ->unique()
             ->values();
 
-        return view('events.history', compact('history', 'departments', 'filters', 'viewableEventIds'));
+        return view('events.history', compact('history', 'roles', 'filters', 'viewableEventIds'));
     }
 
     /**
@@ -184,7 +184,7 @@ class EventController extends Controller
                 'Event Name',
                 'Date',
                 'Status',
-                'Department',
+                'Role',
                 'Created By',
                 'Performed By',
                 'Action',
@@ -202,7 +202,7 @@ class EventController extends Controller
             foreach ($filtered as $entry) {
                 $eventData = is_array($entry->event_data ?? null) ? $entry->event_data : [];
                 $creatorName = $entry->creator->name ?? (isset($eventData['created_by']) ? 'User #' . $eventData['created_by'] : '');
-                $department = $entry->creator->department ?? '';
+                $roleLabel = $entry->creator->role_label ?? ($entry->creator->role ?? '');
 
                 $performedById = $entry->performed_by
                     ?? ($entry->event_data['approved_by'] ?? null)
@@ -217,7 +217,7 @@ class EventController extends Controller
                     $entry->title ?? '',
                     $this->safeDate($entry->event_date),
                     ucfirst((string) ($entry->status ?? '')),
-                    $department,
+                    $roleLabel,
                     $creatorName,
                     $performedBy,
                     str_replace('_', ' ', (string) ($entry->action ?? '')),
@@ -248,12 +248,14 @@ class EventController extends Controller
 
         $direction = strtolower((string) $request->input('direction', 'desc')) === 'asc' ? 'asc' : 'desc';
         $status = (string) $request->input('status', '');
+        $legacyDepartment = (string) $request->input('department', '');
+        $role = (string) $request->input('role', $legacyDepartment);
 
         return [
             'search' => (string) $request->input('search', ''),
             'event_date' => (string) $request->input('event_date', ''),
             'status' => $status,
-            'department' => (string) $request->input('department', ''),
+            'role' => $role,
             'sort' => $sort,
             'direction' => $direction,
         ];
@@ -454,10 +456,10 @@ class EventController extends Controller
                 return false;
             }
 
-            if ($filters['department'] !== '') {
+            if (($filters['role'] ?? '') !== '') {
                 $creator = $item->creator ?? null;
-                $creatorDepartment = $creator && is_object($creator) ? ($creator->department ?? null) : null;
-                if ($creatorDepartment !== $filters['department']) {
+                $creatorRole = $creator && is_object($creator) ? ($creator->role ?? null) : null;
+                if ($creatorRole !== $filters['role']) {
                     return false;
                 }
             }

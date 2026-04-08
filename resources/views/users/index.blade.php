@@ -51,7 +51,7 @@
                                     <th>Email</th>
                                     <th>Role</th>
                                     <th>Employee ID</th>
-                                    <th>Department</th>
+                                    <th>Role (Display)</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -61,10 +61,10 @@
                                     <td>{{ $user->name }}</td>
                                     <td>{{ $user->email }}</td>
                                     <td>
-                                        <span class="badge bg-primary">{{ ucfirst(str_replace('_', ' ', $user->role)) }}</span>
+                                        <span class="badge bg-primary">{{ $user->role_label }}</span>
                                     </td>
                                     <td>{{ $user->employee_id ?? 'N/A' }}</td>
-                                    <td>{{ $user->department ?? 'N/A' }}</td>
+                                    <td>{{ $user->role_label }}</td>
                                     <td>
                                         <div class="btn-group" role="group">
                                             <a href="{{ route('users.show', $user) }}" class="btn btn-sm btn-outline-primary">

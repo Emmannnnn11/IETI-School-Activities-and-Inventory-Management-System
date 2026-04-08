@@ -103,8 +103,8 @@ Route::middleware(['auth'])->group(function () {
             ->get();
         
         return response()->json($events->map(function ($event) {
-            $department = $event->department ?: ($event->creator->department ?? null);
-            $normalizedDepartment = mb_strtolower(trim((string) $department));
+            $creatorRole = $event->creator->role ?? null;
+            $normalizedDepartment = mb_strtolower(trim((string) $creatorRole));
             $departmentColor = null;
 
             if ($normalizedDepartment !== '') {
@@ -120,7 +120,6 @@ Route::middleware(['auth'])->group(function () {
             $startDate = $event->effective_start_date;
             $endDate = $event->effective_end_date;
 
-            $creatorRole = $event->creator->role ?? null;
             $creatorRoleNormalized = mb_strtolower(trim((string) $creatorRole));
             $schedulerLabel = null;
             if ($creatorRoleNormalized !== '') {
@@ -132,7 +131,7 @@ Route::middleware(['auth'])->group(function () {
                     default => ucwords(str_replace('_', ' ', $creatorRoleNormalized)),
                 };
             }
-            $schedulerDepartmentOrRole = $department ?: $schedulerLabel;
+            $schedulerDepartmentOrRole = $schedulerLabel ?: ($event->department ? ucwords(str_replace('_', ' ', $event->department)) : null);
 
             return [
                 'id' => $event->id,
@@ -142,13 +141,14 @@ Route::middleware(['auth'])->group(function () {
                 'end' => $endDate ? $endDate->copy()->addDay()->format('Y-m-d') : null,
                 'color' => $event->status_color,
                 'status' => $event->status,
-                'department' => $department,
+                'department' => $event->department,
                 'department_color' => $departmentColor,
                 'location' => $event->location,
                 'start_time' => \Carbon\Carbon::parse($event->start_time)->format('H:i'),
                 'end_time' => \Carbon\Carbon::parse($event->end_time)->format('H:i'),
                 // Tooltip-safe fields (avoid full details here)
                 'scheduler_department' => $schedulerDepartmentOrRole,
+                'scheduler_role' => $schedulerDepartmentOrRole,
                 'creator_role' => $schedulerLabel,
                 'creator' => $event->creator->name ?? 'Unknown',
             ];

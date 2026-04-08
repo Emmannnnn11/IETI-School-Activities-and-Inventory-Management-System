@@ -46,7 +46,7 @@
                         </div>
                         <div class="col-md-4">
                             <h6 class="text-muted">Role</h6>
-                            <span class="badge bg-primary">{{ ucfirst(str_replace('_', ' ', $user->role)) }}</span>
+                            <span class="badge bg-primary">{{ $user->role_label }}</span>
                         </div>
                     </div>
 
@@ -57,8 +57,8 @@
                             <p class="h6">{{ $user->employee_id }}</p>
                         </div>
                         <div class="col-md-6">
-                            <h6 class="text-muted">Department</h6>
-                            <p class="h6">{{ $user->department ?? 'N/A' }}</p>
+                            <h6 class="text-muted">Role (Display)</h6>
+                            <p class="h6">{{ $user->role_label }}</p>
                         </div>
                     </div>
                     @endif

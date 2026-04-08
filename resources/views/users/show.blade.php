@@ -46,11 +46,11 @@
                         </div>
                         <div class="col-md-4">
                             <h6 class="text-muted">Role</h6>
-                            <span class="badge bg-primary">{{ ucfirst(str_replace('_', ' ', $user->role)) }}</span>
+                            <span class="badge bg-primary">{{ $user->role_label }}</span>
                         </div>
                     </div>
 
-                    @if($user->employee_id || $user->department)
+                    @if($user->employee_id || $user->role)
                     <hr>
                     <div class="row mb-3">
                         @if($user->employee_id)
@@ -59,10 +59,10 @@
                             <p class="h6">{{ $user->employee_id }}</p>
                         </div>
                         @endif
-                        @if($user->department)
+                        @if($user->role)
                         <div class="col-md-6">
-                            <h6 class="text-muted">Department</h6>
-                            <p class="h6">{{ $user->department }}</p>
+                            <h6 class="text-muted">Role (Display)</h6>
+                            <p class="h6">{{ $user->role_label }}</p>
                         </div>
                         @endif
                     </div>

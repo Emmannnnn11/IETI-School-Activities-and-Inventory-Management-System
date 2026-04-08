@@ -49,6 +49,14 @@ class User extends Authenticatable
     ];
 
     /**
+     * Human-readable role label for UI display.
+     */
+    public function getRoleLabelAttribute(): string
+    {
+        return $this->formatUiLabel($this->role);
+    }
+
+    /**
      * Check if user is admin
      */
     public function isAdmin(): bool
@@ -171,6 +179,16 @@ class User extends Authenticatable
     private function normalizeInventoryCategory(string $category): string
     {
         return mb_strtolower(trim($category));
+    }
+
+    private function formatUiLabel(?string $value): string
+    {
+        $normalized = trim((string) $value);
+        if ($normalized === '') {
+            return 'N/A';
+        }
+
+        return ucwords(str_replace('_', ' ', $normalized));
     }
 
     /**

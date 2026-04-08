@@ -221,4 +221,23 @@ class Event extends Model
         // Different years: "Dec 30, 2025 – Jan 02, 2026"
         return $start->format('M d, Y') . ' – ' . $end->format('M d, Y');
     }
+
+    /**
+     * Human-readable scheduler role for UI display.
+     */
+    public function getSchedulerRoleLabelAttribute(): string
+    {
+        $role = $this->creator?->role;
+        if (trim((string) $role) !== '') {
+            return ucwords(str_replace('_', ' ', (string) $role));
+        }
+
+        // Backward-compatible fallback for legacy records with no creator role available.
+        $department = trim((string) $this->department);
+        if ($department !== '') {
+            return ucwords(str_replace('_', ' ', $department));
+        }
+
+        return 'N/A';
+    }
 }

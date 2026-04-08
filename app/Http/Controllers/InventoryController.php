@@ -481,7 +481,7 @@ class InventoryController extends Controller
 
             $headers = [
                 'Inventory Item Name',
-                'Users Department',
+                'User Role',
                 'Quantity Requested',
                 'Event Title',
                 'Created At',
@@ -501,7 +501,7 @@ class InventoryController extends Controller
 
             foreach ($eventItems as $eventItem) {
                 $itemName = $eventItem->inventoryItem->name ?? '';
-                $department = $eventItem->event->creator->department ?? '';
+                $role = $eventItem->event->creator->role_label ?? ($eventItem->event->creator->role ?? '');
                 $quantityRequested = (int) ($eventItem->quantity_requested ?? 0);
                 $quantity = $quantityRequested;
                 $eventTitle = $eventItem->event->title ?? '';
@@ -519,7 +519,7 @@ class InventoryController extends Controller
 
                 $row = [
                     $itemName,
-                    $department,
+                    $role,
                     (string) $quantity,
                     $eventTitle,
                     $createdAt,
