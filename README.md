@@ -2,7 +2,7 @@
 
 Web app for scheduling school activities, approving events, and tracking shared inventory at **IETI College of Science and Technology Inc.**
 
-**Live demo:** [https://ieti-school-activities-and-inventory-management-system.vercel.app](https://ieti-school-activities-and-inventory-management-system.vercel.app)
+**Live demo:** [https://ieti-school-activities-and-inventor.vercel.app](https://ieti-school-activities-and-inventor.vercel.app) (requires [Vercel PHP setup](docs/DEPLOY_VERCEL.md))
 
 ## About this project
 
