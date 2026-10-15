@@ -1,25 +1,54 @@
 # Deploying on Vercel (Laravel + PHP)
 
-If the site **downloads a file named `download`** or `index.php`, Vercel was serving PHP as a static file. This repo includes `vercel.json` and `api/index.php` so the **vercel-php** runtime executes Laravel.
+If the site **downloads a file named `download`**, Vercel was serving PHP as a static file. This repo uses `vercel.json` + `api/index.php` + **vercel-php**.
 
-## Vercel project settings
+## 1. Redeploy first (often enough)
 
-1. **Settings → General**
-   - **Framework Preset:** Other
-   - **Root Directory:** `.` (repository root)
-   - **Output Directory:** leave **empty** (do not set to `public` only)
+After the latest commit with `vercel.json`, open the project → **Deployments** → **Redeploy** the latest **Ready** build.  
+`vercel.json` already sets `"framework": null` (same as **Other**), so you may not need any dashboard change.
 
-2. **Environment variables** (Production + Preview): keep `APP_*` and `DB_*` as already configured. Also add:
+## 2. Where settings are in the Vercel UI
 
-   | Key | Value |
-   | --- | --- |
-   | `CACHE_DRIVER` | `array` |
-   | `SESSION_DRIVER` | `cookie` |
-   | `LOG_CHANNEL` | `stderr` |
-   | `VIEW_COMPILED_PATH` | `/tmp` |
+Vercel moved menus; there is not always a tab literally named **General**.
 
-3. Redeploy from **Deployments → Redeploy**.
+1. Go to [vercel.com/dashboard](https://vercel.com/dashboard).
+2. Click your **project card** (not the team home).
+3. Open **Settings** — top navigation bar on the project (**Overview · Deployments · … · Settings**), or a gear on the left.
+4. In the left sidebar, open **Build and Deployment** (sometimes grouped under **Build & Development Settings**).
 
-## Live URL
+There you should see:
 
-Use the domain shown under **Domains** on the deployment (e.g. `https://ieti-school-activities-and-inventor.vercel.app`).
+- **Framework Preset** — should be **Other** (overridden by `vercel.json` anyway).
+- **Output Directory** — if it shows `public`, turn **Override** on and **clear the field** (empty).  
+  Leaving `public` only is what causes PHP to download instead of run.
+
+If you still cannot find **Output Directory**, skip it and redeploy; the repo config is the source of truth.
+
+## 3. Environment variables
+
+**Settings → Environment Variables** (same project sidebar).
+
+Keep existing `APP_*` and `DB_*`. Add for **Production** and **Preview** if missing:
+
+| Key | Value |
+| --- | --- |
+| `CACHE_DRIVER` | `array` |
+| `SESSION_DRIVER` | `cookie` |
+| `LOG_CHANNEL` | `stderr` |
+| `VIEW_COMPILED_PATH` | `/tmp` |
+
+Save, then **Redeploy**.
+
+## 4. Check it worked
+
+Open **Visit** on the deployment (e.g. `https://ieti-school-activities-and-inventor.vercel.app`).
+
+- You should see the **login page**, not a download.
+- On the project **Overview**, **Function Invocations** should increase when you refresh the site (not stay at 0).
+
+## 5. Build failed?
+
+Open the failed deployment → **Building** logs. Common fixes:
+
+- Ensure **Install Command** is not blocking Composer (repo sets install via `vercel.json`).
+- Confirm `APP_KEY` and `DB_*` exist for the environment being built.
