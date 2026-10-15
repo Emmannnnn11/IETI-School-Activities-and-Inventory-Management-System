@@ -5,5 +5,8 @@
 /storage/logs
 /storage/framework
 .env
+.env.*
+!.env.example
 .env.backup
+.env.bak
 .phpunit.result.cache
