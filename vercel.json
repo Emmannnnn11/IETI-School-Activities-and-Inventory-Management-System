@@ -2,9 +2,10 @@
   "version": 2,
   "framework": null,
   "installCommand": "composer install --no-dev --optimize-autoloader --no-interaction",
+  "buildCommand": "npm run vercel-build",
   "functions": {
     "api/index.php": {
-      "runtime": "vercel-php@0.6.2"
+      "runtime": "vercel-php@0.7.4"
     }
   },
   "routes": [

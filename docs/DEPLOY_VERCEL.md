@@ -46,9 +46,12 @@ Open **Visit** on the deployment (e.g. `https://ieti-school-activities-and-inven
 - You should see the **login page**, not a download.
 - On the project **Overview**, **Function Invocations** should increase when you refresh the site (not stay at 0).
 
-## 5. Build failed?
+## 5. Build failed (`vercel build` exited with 1)?
 
-Open the failed deployment → **Building** logs. Common fixes:
+1. Open the failed deployment → **Building** → read the red error (often Composer or Node/PHP runtime).
+2. **Settings → Build and Deployment → Node.js Version** → set **20.x** (avoid **24.x** with older PHP runtimes).
+3. **Deployments → ⋯ → Redeploy** → turn **off** “Use existing Build Cache”.
+4. Optional env var: `VERCEL_FORCE_NO_BUILD_CACHE` = `1` for Production + Preview.
 
-- Ensure **Install Command** is not blocking Composer (repo sets install via `vercel.json`).
-- Confirm `APP_KEY` and `DB_*` exist for the environment being built.
+This repo includes `package.json` (`vercel-build`) and `vercel-php@0.7.4` in `vercel.json`.
+Confirm `APP_KEY` and `DB_*` exist for the environment being built.
