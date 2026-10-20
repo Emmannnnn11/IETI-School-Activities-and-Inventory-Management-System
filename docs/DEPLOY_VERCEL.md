@@ -53,5 +53,5 @@ Open **Visit** on the deployment (e.g. `https://ieti-school-activities-and-inven
 3. **Deployments → ⋯ → Redeploy** → turn **off** “Use existing Build Cache”.
 4. Optional env var: `VERCEL_FORCE_NO_BUILD_CACHE` = `1` for Production + Preview.
 
-This repo includes `package.json` (`vercel-build`) and `vercel-php@0.7.4` in `vercel.json`.
+Do **not** set **Install Command** or **Build Command** to `composer` in the dashboard — Composer is not on the Node build path (exit **127**). This repo uses **vercel-php**, which runs Composer during the PHP build. `vercel.json` sets `vercel-php@0.7.4`.
 Confirm `APP_KEY` and `DB_*` exist for the environment being built.

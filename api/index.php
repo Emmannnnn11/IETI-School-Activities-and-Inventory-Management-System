@@ -3,4 +3,6 @@
 /**
  * Vercel serverless entry point — forwards all HTTP traffic to Laravel's front controller.
  */
-require __DIR__.'/../public/index.php';
+chdir(dirname(__DIR__).'/public');
+
+require dirname(__DIR__).'/public/index.php';

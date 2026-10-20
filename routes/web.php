@@ -21,6 +21,8 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
+Route::get('/_health', fn () => response('ok', 200, ['Content-Type' => 'text/plain']));
+
 // Authentication Routes
 Route::get('login', [App\Http\Controllers\Auth\LoginController::class, 'showLoginForm'])->name('login');
 Route::post('login', [App\Http\Controllers\Auth\LoginController::class, 'login']);
