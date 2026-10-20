@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Support\Facades\Facade;
@@ -77,7 +78,7 @@ return [
 
     'maintenance' => [
         'driver' => 'file',
-        // 'store'  => 'redis',
+        // 'store' => 'redis',
     ],
 
     /*
@@ -90,6 +91,7 @@ return [
         /*
          * Package Service Providers...
          */
+        Illuminate\View\ViewServiceProvider::class,
 
         /*
          * Application Service Providers...
@@ -112,4 +114,3 @@ return [
     ])->toArray(),
 
 ];
-
