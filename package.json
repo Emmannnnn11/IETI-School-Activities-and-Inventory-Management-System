@@ -1,6 +1,4 @@
+
 {
-  "private": true,
-  "scripts": {
-    "vercel-build": "mkdir -p bootstrap/cache storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs && composer install --no-dev --optimize-autoloader --no-interaction"
-  }
+  "private": true
 }
