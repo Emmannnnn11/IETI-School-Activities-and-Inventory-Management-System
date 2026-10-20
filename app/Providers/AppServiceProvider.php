@@ -11,7 +11,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        if (getenv('VERCEL') || getenv('VERCEL_ENV')) {
+            config([
+                'session.driver' => 'array',
+                'cache.default' => 'array',
+                'view.compiled' => '/tmp/views',
+            ]);
+        }
     }
 
     /**
