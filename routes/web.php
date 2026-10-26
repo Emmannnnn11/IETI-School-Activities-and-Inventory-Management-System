@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InventoryController;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -140,20 +141,4 @@ Route::middleware(['auth'])->group(function () {
                 'title' => $event->title,
                 // For FullCalendar: multi-day events use an exclusive end date (end + 1 day)
                 'start' => $startDate ? $startDate->format('Y-m-d') : null,
-                'end' => $endDate ? $endDate->copy()->addDay()->format('Y-m-d') : null,
-                'color' => $event->status_color,
-                'status' => $event->status,
-                'department' => $event->department,
-                'department_color' => $departmentColor,
-                'location' => $event->location,
-                'start_time' => \Carbon\Carbon::parse($event->start_time)->format('H:i'),
-                'end_time' => \Carbon\Carbon::parse($event->end_time)->format('H:i'),
-                // Tooltip-safe fields (avoid full details here)
-                'scheduler_department' => $schedulerDepartmentOrRole,
-                'scheduler_role' => $schedulerDepartmentOrRole,
-                'creator_role' => $schedulerLabel,
-                'creator' => $event->creator->name ?? 'Unknown',
-            ];
-        }));
-    });
-});
+                'end' => $endDate ?
