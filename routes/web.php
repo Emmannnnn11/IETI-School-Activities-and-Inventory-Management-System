@@ -157,8 +157,3 @@ Route::middleware(['auth'])->group(function () {
         }));
     });
 });
-
-// TEMPORARY COOKIE TEST: delete after testing
-Route::get('/cookie-test', function () {
-    return response('ok')->cookie('test_cookie', 'hello', 10);
-});
